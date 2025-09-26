@@ -30,13 +30,29 @@ import { authenticate } from "../shopify.server";
 // SERVER-SIDE ACTION
 export async function action({ request }) {
   try {
-    const { admin } = await authenticate.admin(request);
+    const { admin, session } = await authenticate.admin(request);
     const formData = await request.formData();
+    const { shop } = session;
+    
+    console.log("session: ", session);
 
     const offerDataString = formData.get("offerData");
     if (!offerDataString) {
       throw new Error("No offer data received");
     }
+
+    // later implemetation adding shop id to offers
+//     const shopInfo = await admin.api.clients.Graphql({ session }).query({
+//   data: `{
+//     shop {
+//       id
+//       myshopifyDomain
+//     }
+//   }`,
+// });
+
+  // console.log("shopinfo:", shopInfo);
+  
 
     const data = JSON.parse(offerDataString);
     console.log("Parsed offer data:", data);
@@ -89,6 +105,7 @@ export async function action({ request }) {
 
         functionId: "0199377a-e148-7a61-bedb-f7d25bd5d3ab",
         status: "DRAFT",
+        shop: shop
       },
     });
 

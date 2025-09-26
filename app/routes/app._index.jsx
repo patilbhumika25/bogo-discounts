@@ -341,6 +341,10 @@ import {
 } from "@shopify/polaris";
 import { LightbulbIcon, TargetFilledIcon } from "@shopify/polaris-icons";
 
+import { requireSubscription } from "../utils/requireSubscription";
+import { authenticate } from "../shopify.server";
+import { json } from "@remix-run/node";
+
 const campaigns = [
   {
     id: "buy-x-get-y",
@@ -389,6 +393,28 @@ const campaigns = [
     noteIcon: TargetFilledIcon,
   },
 ];
+
+export const loader = async ({ request }) => {
+  try {
+    const { admin } = await authenticate.admin(request);
+    const { shouldRedirect } = await requireSubscription(request);
+
+    console.log('here');
+    if (shouldRedirect) {
+      // return json({ shouldRedirect: true });
+      console.log('app index redirect')
+    }
+
+    return json({
+      data: 'null'
+    })
+  } catch (error) {
+    return json({
+      data: 'error'
+    })
+    
+  }
+};
 
 export default function CampaignsPage() {
   const navigate = useNavigate();

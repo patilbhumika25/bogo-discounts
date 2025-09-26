@@ -59,6 +59,8 @@ model Offer {
 
   shopifyResp Json? // raw response for auditing
 
+  shop String @default("NA")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
