@@ -23,6 +23,7 @@ export default function App() {
           Home
         </Link>
         <Link to="/app/campaign">Campaign</Link>
+        <Link to="/app/billing">Accounts</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

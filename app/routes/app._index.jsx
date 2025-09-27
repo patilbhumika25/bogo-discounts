@@ -327,7 +327,7 @@
 //   );
 // }
 
-import { useNavigate } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page,
   Card,
@@ -344,6 +344,7 @@ import { LightbulbIcon, TargetFilledIcon } from "@shopify/polaris-icons";
 import { requireSubscription } from "../utils/requireSubscription";
 import { authenticate } from "../shopify.server";
 import { json } from "@remix-run/node";
+import { useEffect } from "react";
 
 const campaigns = [
   {
@@ -406,7 +407,7 @@ export const loader = async ({ request }) => {
     }
 
     return json({
-      data: 'null'
+      shouldRedirect
     })
   } catch (error) {
     return json({
@@ -418,6 +419,16 @@ export const loader = async ({ request }) => {
 
 export default function CampaignsPage() {
   const navigate = useNavigate();
+  const{ shouldRedirect } = useLoaderData();
+  
+   useEffect(() => {
+    //console.log("shouldRedirect inside orders:", shouldRedirect);
+    if (shouldRedirect) {
+     return navigate("/app/billing");
+    }
+  }, [shouldRedirect, navigate]);
+
+  console.log('should redirect', shouldRedirect);
 
   return (
     <Page title="Choose campaign type">
