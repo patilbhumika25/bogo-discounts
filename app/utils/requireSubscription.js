@@ -37,5 +37,5 @@ export async function requireSubscription(request) {
 //     // throw redirect(`/pricing?reason=limit_exceeded&plan=${activePlan}`);
 //   }
 
-  return { shouldRedirect: true };
+  return { shouldRedirect: false };
 }

@@ -19,6 +19,20 @@ const shopify = shopifyApp({
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
+  //  webhooks: {
+  //   customersDataRequest: {
+  //     topic: "CUSTOMERS_DATA_REQUEST",
+  //     callbackUrl: "/webhooks/customers.data_request",
+  //   },
+  //   customersRedact: {
+  //     topic: "CUSTOMERS_REDACT",
+  //     callbackUrl: "/webhooks/customers.redact",
+  //   },
+  //   shopRedact: {
+  //     topic: "SHOP_REDACT",
+  //     callbackUrl: "/webhooks/shop.redact",
+  //   },
+  // },
   distribution: AppDistribution.AppStore,
    billing: {
     [STARTER_PLAN]: {

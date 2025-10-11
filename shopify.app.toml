@@ -2,9 +2,9 @@
 
 client_id = "e38c9e6463e93e5c12ec9b3249729d15"
 name = "BOGO, Bundles & Free Gifts"
-handle = "bogo-discounts-2"
-application_url = "https://intro-keyboards-away-remainder.trycloudflare.com"
+application_url = "https://bogo-bundles-free-gifts-app.fly.dev"
 embedded = true
+handle = "bogo-discounts-2"
 
 [build]
 automatically_update_urls_on_dev = true
@@ -20,12 +20,29 @@ api_version = "2025-07"
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
 
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request"]
+  uri = "/webhooks/customers/data_request"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/redact"]
+  uri = "/webhooks/customers/redact"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["shop/redact"]
+  uri = "/webhooks/shop/redact"
+
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_discounts"
+scopes = "write_discounts,write_products"
 
 [auth]
-redirect_urls = ["https://intro-keyboards-away-remainder.trycloudflare.com/auth/callback", "https://intro-keyboards-away-remainder.trycloudflare.com/auth/shopify/callback", "https://intro-keyboards-away-remainder.trycloudflare.com/api/auth/callback"]
+redirect_urls = [
+  "https://bogo-bundles-free-gifts-app.fly.dev/auth/callback",
+  "https://bogo-bundles-free-gifts-app.fly.dev/auth/shopify/callback",
+  "https://bogo-bundles-free-gifts-app.fly.dev/api/auth/callback"
+]
 
 [pos]
 embedded = false

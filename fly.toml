@@ -1,0 +1,29 @@
+# fly.toml app configuration file generated for bogo-bundles-free-gifts-app-quiet-glitter-9600 on 2025-10-06T18:22:24+05:30
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'bogo-bundles-free-gifts-app'
+primary_region = 'bom'
+
+[env]
+  PORT = '3000'
+  SHOPIFY_APP_URL = 'https://bogo-bundles-free-gifts-app.fly.dev'
+  SHOPIFY_API_KEY = 'e38c9e6463e93e5c12ec9b3249729d15'
+  SCOPES = 'write_discounts,write_products'
+
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
