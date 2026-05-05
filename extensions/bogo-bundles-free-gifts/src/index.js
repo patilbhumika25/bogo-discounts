@@ -2,7 +2,7 @@ import { DiscountApplicationStrategy } from "@shopify/shopify_function";
 
 export function cartLinesDiscountsGenerateRun(input) {
   console.error("Function input:", JSON.stringify(input, null, 2));
-  
+
   // Parse configuration from metafield
   const config = JSON.parse(input.discount?.metafield?.value || "{}");
   console.error("Parsed config:", config);

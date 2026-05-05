@@ -1,0 +1,5 @@
+{
+  "admin.discount-details.function-settings.render": {
+    "main": "dist/tier-pricing-settings.js"
+  }
+}

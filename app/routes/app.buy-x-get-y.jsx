@@ -33,7 +33,7 @@ export async function action({ request }) {
     const { admin, session } = await authenticate.admin(request);
     const formData = await request.formData();
     const { shop } = session;
-    
+
     console.log("session: ", session);
 
     const offerDataString = formData.get("offerData");
@@ -42,17 +42,16 @@ export async function action({ request }) {
     }
 
     // later implemetation adding shop id to offers
-//     const shopInfo = await admin.api.clients.Graphql({ session }).query({
-//   data: `{
-//     shop {
-//       id
-//       myshopifyDomain
-//     }
-//   }`,
-// });
+    //     const shopInfo = await admin.api.clients.Graphql({ session }).query({
+    //   data: `{
+    //     shop {
+    //       id
+    //       myshopifyDomain
+    //     }
+    //   }`,
+    // });
 
-  // console.log("shopinfo:", shopInfo);
-  
+    // console.log("shopinfo:", shopInfo);
 
     const data = JSON.parse(offerDataString);
     console.log("Parsed offer data:", data);
@@ -105,7 +104,7 @@ export async function action({ request }) {
 
         functionId: "0199377a-e148-7a61-bedb-f7d25bd5d3ab",
         status: "DRAFT",
-        shop: shop
+        shop: shop,
       },
     });
 
@@ -220,7 +219,7 @@ export async function action({ request }) {
                 }
               : {
                   collections: {
-                    add: data.selectedCollections.map((c) => c.id),
+                    add: data.selectedCollections.map((c) => c.id), // Changed from collectionsToAdd
                   },
                 },
         },
@@ -241,7 +240,7 @@ export async function action({ request }) {
                 }
               : {
                   collections: {
-                    collectionsToAdd: data.getCollections.map((c) => c.id),
+                    add: data.getCollections.map((c) => c.id), // Changed from id to add
                   },
                 },
         },
@@ -255,7 +254,10 @@ export async function action({ request }) {
       },
     };
 
-    console.log("Enhanced BXGY GraphQL Variables:", JSON.stringify(variables, null, 2));
+    console.log(
+      "Enhanced BXGY GraphQL Variables:",
+      JSON.stringify(variables, null, 2),
+    );
 
     const response = await admin.graphql(mutation, { variables });
     const jsonResponse = await response.json();
@@ -468,12 +470,18 @@ export default function BuyXGetY() {
     if (!formData.minQuantity || parseInt(formData.minQuantity) < 1) {
       errors.push("Minimum quantity must be at least 1");
     }
-    
+
     // Check if trigger items are selected
-    if (formData.triggerType === "products" && formData.selectedProducts.length === 0) {
+    if (
+      formData.triggerType === "products" &&
+      formData.selectedProducts.length === 0
+    ) {
       errors.push("At least one trigger product must be selected");
     }
-    if (formData.triggerType === "collections" && formData.selectedCollections.length === 0) {
+    if (
+      formData.triggerType === "collections" &&
+      formData.selectedCollections.length === 0
+    ) {
       errors.push("At least one trigger collection must be selected");
     }
 
@@ -481,7 +489,10 @@ export default function BuyXGetY() {
     if (formData.getType === "products" && formData.getProducts.length === 0) {
       errors.push("At least one reward product must be selected");
     }
-    if (formData.getType === "collections" && formData.getCollections.length === 0) {
+    if (
+      formData.getType === "collections" &&
+      formData.getCollections.length === 0
+    ) {
       errors.push("At least one reward collection must be selected");
     }
 
@@ -591,7 +602,7 @@ export default function BuyXGetY() {
                 {/* Customer Buys */}
                 <Card>
                   <BlockStack gap="400">
-                    <Text as="h3" variant="headingSm" fontWeight="medium">
+                    <Text as="h2" variant="headingSm" fontWeight="medium">
                       Customer buys
                     </Text>
 
@@ -637,7 +648,8 @@ export default function BuyXGetY() {
                       formData.selectedProducts.length > 0 && (
                         <Card sectioned>
                           <Text as="h4" variant="headingSm" fontWeight="medium">
-                            Trigger Products ({formData.selectedProducts.length})
+                            Trigger Products ({formData.selectedProducts.length}
+                            )
                           </Text>
                           <ResourceList
                             resourceName={{
@@ -693,7 +705,8 @@ export default function BuyXGetY() {
                       formData.selectedCollections.length > 0 && (
                         <Card sectioned>
                           <Text as="h4" variant="headingSm" fontWeight="medium">
-                            Trigger Collections ({formData.selectedCollections.length})
+                            Trigger Collections (
+                            {formData.selectedCollections.length})
                           </Text>
                           <ResourceList
                             resourceName={{
@@ -750,7 +763,7 @@ export default function BuyXGetY() {
                 {/* Customer Gets - Enhanced */}
                 <Card>
                   <BlockStack gap="400">
-                    <Text as="h3" variant="headingSm" fontWeight="medium">
+                    <Text as="h2" variant="headingSm" fontWeight="medium">
                       Customer Gets
                     </Text>
 
@@ -791,108 +804,118 @@ export default function BuyXGetY() {
                     </InlineStack>
 
                     {/* Display selected reward products */}
-                    {formData.getType === "products" && formData.getProducts.length > 0 && (
-                      <Card sectioned>
-                        <Text as="h4" variant="headingSm" fontWeight="medium">
-                          Reward Products ({formData.getProducts.length})
-                        </Text>
-                        <ResourceList
-                          resourceName={{
-                            singular: "product",
-                            plural: "products",
-                          }}
-                          items={formData.getProducts}
-                          renderItem={(product) => {
-                            const media = (
-                              <Thumbnail
-                                source={
-                                  product.images?.[0]?.originalSrc ||
-                                  product.image?.src ||
-                                  ""
-                                }
-                                alt={product.title}
-                                size="small"
-                              />
-                            );
-                            return (
-                              <ResourceList.Item id={product.id} media={media}>
-                                <Text variant="bodyMd" as="span">
-                                  {product.title}
-                                </Text>
-                                <div>
-                                  <Button
-                                    variant="plain"
-                                    tone="critical"
-                                    onClick={() =>
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        getProducts: prev.getProducts.filter(
-                                          (p) => p.id !== product.id,
-                                        ),
-                                      }))
-                                    }
-                                  >
-                                    Remove
-                                  </Button>
-                                </div>
-                              </ResourceList.Item>
-                            );
-                          }}
-                        />
-                      </Card>
-                    )}
+                    {formData.getType === "products" &&
+                      formData.getProducts.length > 0 && (
+                        <Card sectioned>
+                          <Text as="h4" variant="headingSm" fontWeight="medium">
+                            Reward Products ({formData.getProducts.length})
+                          </Text>
+                          <ResourceList
+                            resourceName={{
+                              singular: "product",
+                              plural: "products",
+                            }}
+                            items={formData.getProducts}
+                            renderItem={(product) => {
+                              const media = (
+                                <Thumbnail
+                                  source={
+                                    product.images?.[0]?.originalSrc ||
+                                    product.image?.src ||
+                                    ""
+                                  }
+                                  alt={product.title}
+                                  size="small"
+                                />
+                              );
+                              return (
+                                <ResourceList.Item
+                                  id={product.id}
+                                  media={media}
+                                >
+                                  <Text variant="bodyMd" as="span">
+                                    {product.title}
+                                  </Text>
+                                  <div>
+                                    <Button
+                                      variant="plain"
+                                      tone="critical"
+                                      onClick={() =>
+                                        setFormData((prev) => ({
+                                          ...prev,
+                                          getProducts: prev.getProducts.filter(
+                                            (p) => p.id !== product.id,
+                                          ),
+                                        }))
+                                      }
+                                    >
+                                      Remove
+                                    </Button>
+                                  </div>
+                                </ResourceList.Item>
+                              );
+                            }}
+                          />
+                        </Card>
+                      )}
 
                     {/* Display selected reward collections */}
-                    {formData.getType === "collections" && formData.getCollections.length > 0 && (
-                      <Card sectioned>
-                        <Text as="h4" variant="headingSm" fontWeight="medium">
-                          Reward Collections ({formData.getCollections.length})
-                        </Text>
-                        <ResourceList
-                          resourceName={{
-                            singular: "collection",
-                            plural: "collections",
-                          }}
-                          items={formData.getCollections}
-                          renderItem={(collection) => {
-                            const media = (
-                              <Thumbnail
-                                source={
-                                  collection.image?.src ||
-                                  collection.image?.url ||
-                                  ""
-                                }
-                                alt={collection.title}
-                                size="small"
-                              />
-                            );
-                            return (
-                              <ResourceList.Item id={collection.id} media={media}>
-                                <Text variant="bodyMd" as="span">
-                                  {collection.title}
-                                </Text>
-                                <div>
-                                  <Button
-                                    variant="plain"
-                                    tone="critical"
-                                    onClick={() =>
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        getCollections: prev.getCollections.filter(
-                                          (c) => c.id !== collection.id,
-                                        ),
-                                      }))
-                                    }
-                                  >
-                                    Remove
-                                  </Button>
-                                </div>
-                              </ResourceList.Item>
-                            );
-                          }}
-                        />
-                      </Card>
-                    )}
+                    {formData.getType === "collections" &&
+                      formData.getCollections.length > 0 && (
+                        <Card sectioned>
+                          <Text as="h4" variant="headingSm" fontWeight="medium">
+                            Reward Collections ({formData.getCollections.length}
+                            )
+                          </Text>
+                          <ResourceList
+                            resourceName={{
+                              singular: "collection",
+                              plural: "collections",
+                            }}
+                            items={formData.getCollections}
+                            renderItem={(collection) => {
+                              const media = (
+                                <Thumbnail
+                                  source={
+                                    collection.image?.src ||
+                                    collection.image?.url ||
+                                    ""
+                                  }
+                                  alt={collection.title}
+                                  size="small"
+                                />
+                              );
+                              return (
+                                <ResourceList.Item
+                                  id={collection.id}
+                                  media={media}
+                                >
+                                  <Text variant="bodyMd" as="span">
+                                    {collection.title}
+                                  </Text>
+                                  <div>
+                                    <Button
+                                      variant="plain"
+                                      tone="critical"
+                                      onClick={() =>
+                                        setFormData((prev) => ({
+                                          ...prev,
+                                          getCollections:
+                                            prev.getCollections.filter(
+                                              (c) => c.id !== collection.id,
+                                            ),
+                                        }))
+                                      }
+                                    >
+                                      Remove
+                                    </Button>
+                                  </div>
+                                </ResourceList.Item>
+                              );
+                            }}
+                          />
+                        </Card>
+                      )}
                   </BlockStack>
                 </Card>
 
@@ -997,7 +1020,7 @@ export default function BuyXGetY() {
                 <Card>
                   <BlockStack gap="400">
                     <InlineStack align="space-between">
-                      <Text as="h3" variant="headingSm" fontWeight="semibold">
+                      <Text as="h2" variant="headingSm" fontWeight="semibold">
                         Customer eligibility
                       </Text>
                       <p
@@ -1033,7 +1056,7 @@ export default function BuyXGetY() {
                 {/* Schedule */}
                 <Card>
                   <BlockStack gap="400">
-                    <Text as="h3" variant="headingSm" fontWeight="medium">
+                    <Text as="h2" variant="headingSm" fontWeight="medium">
                       Schedule
                     </Text>
                     <FormLayout>
@@ -1053,6 +1076,7 @@ export default function BuyXGetY() {
                             label="Start time"
                             value={formData.startTime}
                             onChange={(val) => handleChange("startTime", val)}
+                            required
                           />
                         </div>
                         <div style={{ maxWidth: "150px" }}>
@@ -1061,6 +1085,7 @@ export default function BuyXGetY() {
                             label="End date"
                             value={formData.endsAt}
                             onChange={(val) => handleChange("endsAt", val)}
+                            required
                           />
                         </div>
                         <div style={{ maxWidth: "100px" }}>
@@ -1069,6 +1094,7 @@ export default function BuyXGetY() {
                             label="End time"
                             value={formData.endTime}
                             onChange={(val) => handleChange("endTime", val)}
+                            required
                           />
                         </div>
                       </FormLayout.Group>
@@ -1095,37 +1121,50 @@ export default function BuyXGetY() {
               </Text>
               <Text as="p" color="subdued">
                 Buy {formData.minQuantity || "X"} from{" "}
-                {formData.triggerType === "products" ? "selected products" : "collections"}, 
-                get {formData.getQuantity || "Y"} from{" "}
-                {formData.getType === "products" ? "selected products" : "collections"}{" "}
-                {formData.discountType.includes("free") ? "free" : 
-                 formData.discountType.includes("percentage") ? `${formData.percentage}% off` :
-                 formData.discountType.includes("fixed") ? `${formData.fixedPrice} off` : ""}
+                {formData.triggerType === "products"
+                  ? "selected products"
+                  : "collections"}
+                , get {formData.getQuantity || "Y"} from{" "}
+                {formData.getType === "products"
+                  ? "selected products"
+                  : "collections"}{" "}
+                {formData.discountType.includes("free")
+                  ? "free"
+                  : formData.discountType.includes("percentage")
+                    ? `${formData.percentage}% off`
+                    : formData.discountType.includes("fixed")
+                      ? `${formData.fixedPrice} off`
+                      : ""}
               </Text>
-              
+
               {/* Show trigger items count */}
-              {formData.triggerType === "products" && formData.selectedProducts.length > 0 && (
-                <Text as="p" color="subdued">
-                  Triggers: {formData.selectedProducts.length} product(s)
-                </Text>
-              )}
-              {formData.triggerType === "collections" && formData.selectedCollections.length > 0 && (
-                <Text as="p" color="subdued">
-                  Triggers: {formData.selectedCollections.length} collection(s)
-                </Text>
-              )}
-              
+              {formData.triggerType === "products" &&
+                formData.selectedProducts.length > 0 && (
+                  <Text as="p" color="subdued">
+                    Triggers: {formData.selectedProducts.length} product(s)
+                  </Text>
+                )}
+              {formData.triggerType === "collections" &&
+                formData.selectedCollections.length > 0 && (
+                  <Text as="p" color="subdued">
+                    Triggers: {formData.selectedCollections.length}{" "}
+                    collection(s)
+                  </Text>
+                )}
+
               {/* Show reward items count */}
-              {formData.getType === "products" && formData.getProducts.length > 0 && (
-                <Text as="p" color="subdued">
-                  Rewards: {formData.getProducts.length} product(s)
-                </Text>
-              )}
-              {formData.getType === "collections" && formData.getCollections.length > 0 && (
-                <Text as="p" color="subdued">
-                  Rewards: {formData.getCollections.length} collection(s)
-                </Text>
-              )}
+              {formData.getType === "products" &&
+                formData.getProducts.length > 0 && (
+                  <Text as="p" color="subdued">
+                    Rewards: {formData.getProducts.length} product(s)
+                  </Text>
+                )}
+              {formData.getType === "collections" &&
+                formData.getCollections.length > 0 && (
+                  <Text as="p" color="subdued">
+                    Rewards: {formData.getCollections.length} collection(s)
+                  </Text>
+                )}
 
               {formData.startsAt && (
                 <Text as="p" color="subdued">
@@ -1133,7 +1172,7 @@ export default function BuyXGetY() {
                   {formData.startTime && ` at ${formData.startTime}`}
                 </Text>
               )}
-              
+
               {formData.endsAt && (
                 <Text as="p" color="subdued">
                   Ends: {formData.endsAt}
@@ -1154,22 +1193,24 @@ export default function BuyXGetY() {
                   Buy 2 items from "Summer Collection", get 1 "Beach Towel" free
                 </Text>
               </div>
-              
+
               <div>
                 <Text as="h5" variant="headingXs" fontWeight="medium">
                   Product → Collection
                 </Text>
                 <Text as="p" variant="bodySm" color="subdued">
-                  Buy 1 "Premium Shirt", get 50% off any item from "Accessories Collection"
+                  Buy 1 "Premium Shirt", get 50% off any item from "Accessories
+                  Collection"
                 </Text>
               </div>
-              
+
               <div>
                 <Text as="h5" variant="headingXs" fontWeight="medium">
                   Collection → Collection
                 </Text>
                 <Text as="p" variant="bodySm" color="subdued">
-                  Buy 3 items from "Winter Wear", get 1 item from "Winter Accessories" free
+                  Buy 3 items from "Winter Wear", get 1 item from "Winter
+                  Accessories" free
                 </Text>
               </div>
             </BlockStack>

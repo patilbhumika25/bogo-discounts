@@ -26,7 +26,7 @@ export default function BillingPage() {
             <Banner 
             title={ `You are subscribed to the ${subscription.name} plan`} 
             tone='success' 
-            action={{ content: 'Change Plan', url: "https://admin.shopify.com/charges/generate-invoices-1/pricing_plans", target: '_top'  }} 
+            action={{ content: 'Change Plan', url: "https://admin.shopify.com/charges/bogo-discounts-2/pricing_plans", target: '_top'  }} 
             ></Banner>) : (
             
           <Card>
@@ -35,7 +35,7 @@ export default function BillingPage() {
                 To learn about plans and explore other available subscription options,
                 click the button below.
               </p>
-              <Button target="_top" url="https://admin.shopify.com/charges/generate-invoices-1/pricing_plans" >View Plan Details</Button>
+              <Button target="_top" url="https://admin.shopify.com/charges/bogo-discounts-2/pricing_plans" >View Plan Details</Button>
             </TextContainer>
           </Card>)}
         </Layout.Section>

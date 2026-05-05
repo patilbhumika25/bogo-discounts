@@ -1,0 +1,25 @@
+-- CreateTable
+CREATE TABLE "Offer" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "title" TEXT NOT NULL,
+    "triggerType" TEXT NOT NULL,
+    "triggerIds" JSONB NOT NULL,
+    "minQty" INTEGER NOT NULL,
+    "rewardType" TEXT NOT NULL,
+    "rewardValue" REAL,
+    "rewardApplyTo" TEXT NOT NULL,
+    "rewardIds" JSONB NOT NULL,
+    "rewardQty" INTEGER NOT NULL,
+    "combinesOrder" BOOLEAN NOT NULL DEFAULT false,
+    "combinesProduct" BOOLEAN NOT NULL DEFAULT false,
+    "combinesShipping" BOOLEAN NOT NULL DEFAULT false,
+    "limitTotalUses" INTEGER,
+    "limitPerCustomer" BOOLEAN NOT NULL DEFAULT false,
+    "startsAt" DATETIME NOT NULL,
+    "endsAt" DATETIME,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "functionId" TEXT NOT NULL,
+    "discountId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);

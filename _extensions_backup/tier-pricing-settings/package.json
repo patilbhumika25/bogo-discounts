@@ -1,0 +1,12 @@
+{
+  "name": "tier-pricing-settings",
+  "private": true,
+  "version": "1.0.0",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "preact": "^10.10.x",
+    "@preact/signals": "^2.3.x",
+    "@shopify/ui-extensions": "^2026.1.0",
+    "@shopify/ui-extensions-react": "^2026.0.0"
+  }
+}

@@ -357,7 +357,7 @@ const campaigns = [
       "https://cdnapps.avada.io/ag-free-gift/giftCampaigns/bxgy.png?width=400",
     exampleIcon: LightbulbIcon,
     noteIcon: TargetFilledIcon,
-    link: 'buy-x-get-y'
+    link: "buy-x-get-y",
   },
   {
     id: "cart-value",
@@ -369,29 +369,30 @@ const campaigns = [
       "https://cdnapps.avada.io/ag-free-gift/giftCampaigns/gwca.png?width=400",
     exampleIcon: LightbulbIcon,
     noteIcon: TargetFilledIcon,
+    link: "free-gift",
   },
   {
-    id: "free-shipping-1",
+    id: "volume-pricing",
+    title: "Quantity / Volume Pricing",
+    description: "Tiered discounts based on item quantity",
+    example: "Buy 2 for ₹999, Buy 3 for ₹1,399",
+    note: "Incentivize bulk purchases",
+    image: "https://cdnapps.avada.io/ag-free-gift/giftCampaigns/gwqu.png?width=400",
+    exampleIcon: LightbulbIcon,
+    noteIcon: TargetFilledIcon,
+    link: "volume-pricing/new",
+  },
+  {
+    id: "combo-offer",
     title: "Combo / Hybrid Offers",
-    description: "Buy 1, get 1 free + 10% off rest of cart.",
-    example: "Spend $75 for free express shipping",
-    note: "Shipping cost focus",
+    description: "BOGO + Discount, BOGO + Gift, or Bundle + Gift",
+    example: "Buy 1 Get 1 + 10% off rest of cart",
+    note: "Multiple offer types combined",
     image:
       "https://cdnapps.avada.io/ag-free-gift/giftCampaigns/shipping-goal.png?width=400",
     exampleIcon: LightbulbIcon,
     noteIcon: TargetFilledIcon,
-  },
-
-  {
-    id: "Gift With Quantity Purchase",
-    title: "Gift With Quantity Purchase",
-    description: "Buy a total number of items to get a discount",
-    example: "Buy 3 items, get 10% off",
-    note: "Item quantity focus",
-    image:
-      "https://cdnapps.avada.io/ag-free-gift/giftCampaigns/gwqu.png?width=400",
-    exampleIcon: LightbulbIcon,
-    noteIcon: TargetFilledIcon,
+    link: "combo-offer",
   },
 ];
 
