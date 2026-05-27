@@ -34,25 +34,37 @@ model Session {
 model Offer {
   id               String    @id @default(cuid())
   title            String
-  triggerType      String // 'products' | 'collections'
-  triggerIds       Json // array of GIDs (Products/Collections)
-  minQty           Int
-  rewardType       String // 'free' | 'percent' | 'amount'
-  rewardValue      Float? // percent (0-100) or amount
-  rewardApplyTo    String // 'selected' | 'same_as_trigger'
-  rewardIds        Json // array of GIDs (Variants/Products) depending on your logic
-  rewardQty        Int // how many Y per bundle
+  offerType        String?   @default("bxgy")
+  triggerType      String?   // 'products' | 'collections' | 'order_value'
+  triggerIds       Json?     // array of GIDs (Products/Collections)
+  minQty           Int?
+  minOrderValue    Float?
+  
+  rewardType       String?   // 'free' | 'percent' | 'amount'
+  rewardValue      Float?    // percent (0-100) or amount
+  rewardApplyTo    String?   // 'selected' | 'same_as_trigger'
+  rewardIds        Json?     // array of GIDs (Variants/Products) depending on your logic
+  rewardQty        Int?      // how many Y per bundle
+  
+  giftSelectionType String?  // 'auto', 'single_choice', 'multi_choice', 'mystery'
+  maxGiftSelection  Int?
+  isMysteryGift     Boolean? @default(false)
+  
+  isTimeLimited    Boolean? @default(false)
+  timeLimit        Int?
+  timeLimitUnit    String?
+  
   combinesOrder    Boolean   @default(false)
   combinesProduct  Boolean   @default(false)
   combinesShipping Boolean   @default(false)
-  limitTotalUses   Int? // null = unlimited
+  limitTotalUses   Int?      // null = unlimited
   limitPerCustomer Boolean   @default(false)
   startsAt         DateTime
   endsAt           DateTime?
   status           String    @default("DRAFT") // DRAFT | ACTIVE | PAUSED
 
   // links to Shopify artifacts
-  functionId String // ID of your deployed Function (UUID)
+  functionId String? // ID of your deployed Function (UUID)
   discountId String? // gid://shopify/DiscountAutomaticNode/... after creation
 
   config Json? // full offer config you built from the form

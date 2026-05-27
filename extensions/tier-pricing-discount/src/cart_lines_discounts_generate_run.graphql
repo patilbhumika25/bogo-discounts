@@ -2,14 +2,25 @@ query CartInput {
   cart {
     lines {
       id
+      quantity
+      merchandise {
+        ... on ProductVariant {
+          id
+          product {
+            id
+          }
+        }
+      }
       cost {
-        subtotalAmount {
+        amountPerQuantity {
           amount
         }
       }
     }
   }
   discount {
-    discountClasses
+    metafield(namespace: "bogo", key: "config") {
+      value
+    }
   }
 }

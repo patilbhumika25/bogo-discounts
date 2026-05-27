@@ -343,10 +343,10 @@ export default function BuyXGetY() {
 
     usageLimits: [],
     customerEligibility: "all",
-    startsAt: "",
-    startTime: "",
+    startsAt: new Date().toISOString().split("T")[0],
+    startTime: "00:00",
     endsAt: "",
-    endTime: "",
+    endTime: "23:59",
   });
 
   const [openSections, setOpenSections] = useState({
@@ -1050,55 +1050,6 @@ export default function BuyXGetY() {
                         }
                       />
                     </Collapsible>
-                  </BlockStack>
-                </Card>
-
-                {/* Schedule */}
-                <Card>
-                  <BlockStack gap="400">
-                    <Text as="h2" variant="headingSm" fontWeight="medium">
-                      Schedule
-                    </Text>
-                    <FormLayout>
-                      <FormLayout.Group>
-                        <div style={{ maxWidth: "150px" }}>
-                          <TextField
-                            type="date"
-                            label="Start date"
-                            value={formData.startsAt}
-                            onChange={(val) => handleChange("startsAt", val)}
-                            required
-                          />
-                        </div>
-                        <div style={{ maxWidth: "100px" }}>
-                          <TextField
-                            type="time"
-                            label="Start time"
-                            value={formData.startTime}
-                            onChange={(val) => handleChange("startTime", val)}
-                            required
-                          />
-                        </div>
-                        <div style={{ maxWidth: "150px" }}>
-                          <TextField
-                            type="date"
-                            label="End date"
-                            value={formData.endsAt}
-                            onChange={(val) => handleChange("endsAt", val)}
-                            required
-                          />
-                        </div>
-                        <div style={{ maxWidth: "100px" }}>
-                          <TextField
-                            type="time"
-                            label="End time"
-                            value={formData.endTime}
-                            onChange={(val) => handleChange("endTime", val)}
-                            required
-                          />
-                        </div>
-                      </FormLayout.Group>
-                    </FormLayout>
                   </BlockStack>
                 </Card>
 

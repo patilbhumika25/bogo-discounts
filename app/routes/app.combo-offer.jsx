@@ -21,6 +21,13 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useState, useEffect, useCallback } from "react";
 import { authenticate } from "../shopify.server";
 import { getProductsFromCollections } from "../utils/products.server";
+import prisma from "../db.server";
+
+// LOADER - Ensures the session is valid when the page loads
+export async function loader({ request }) {
+    await authenticate.admin(request);
+    return null;
+}
 
 // ============================================================================
 // SUBTYPE DEFINITIONS
@@ -42,6 +49,11 @@ const SUBTYPES = {
         description: "Buy a bundle of 3 products for ₹1,499 and get a free gift",
         fields: ["volumeTiers", "giftProducts", "applyTo", "products", "collections"], // Added collections
     },
+    custom_multi_tier_bogo: {
+        title: "Multi-Tier BOGO",
+        description: "Buy 2 get 1, Buy 4 get 3 - Custom tiers",
+        fields: ["bogoTiers", "applyTo", "products", "collections"], 
+    },
 };
 
 const BOGO_TYPE_OPTIONS = [
@@ -56,7 +68,7 @@ const BOGO_TYPE_OPTIONS = [
 // ============================================================================
 
 export async function action({ request }) {
-    const { admin } = await authenticate.admin(request);
+    const { admin, session } = await authenticate.admin(request);
     const formData = await request.formData();
     const offerDataStr = formData.get("offerData");
 
@@ -100,6 +112,7 @@ export async function action({ request }) {
             giftProductIds: (data.giftProducts || []).map((p) => p.id),
             rewardIds: (data.giftProducts || []).map((p) => p.id),
             volumeTiers: data.volumeTiers,
+            bogoTiers: data.bogoTiers,
             message: data.message || data.title,
 
             // Persist originals
@@ -157,12 +170,46 @@ export async function action({ request }) {
 
         if (result.data?.discountAutomaticAppCreate?.userErrors?.length > 0) {
             const errors = result.data.discountAutomaticAppCreate.userErrors;
-            return json({ success: false, error: errors.map((e) => e.message).join(", ") });
+            return json({ success: false, errors: errors.map((e) => e.message).join(", ") });
         }
+
+        const discountId = result.data?.discountAutomaticAppCreate?.automaticAppDiscount?.discountId;
+
+        // Save to internal database
+        await prisma.offer.create({
+            data: {
+                title: data.title,
+                offerType: "combo_offer",
+                triggerType: "products", // Combo offers always products-based
+                triggerIds: selectedProductIds,
+                minQty: 1,
+
+                rewardType: "mixed",
+                rewardValue: null,
+
+                combinesOrder: data.combinesOrder || false,
+                combinesProduct: data.combinesProduct || false,
+                combinesShipping: data.combinesShipping || false,
+
+                startsAt: data.startsAt
+                    ? new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`)
+                    : new Date(),
+                endsAt: data.endsAt
+                    ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
+                    : null,
+
+                status: "ACTIVE",
+                functionId,
+                discountId,
+                config: config,
+                shop: session.shop,
+            }
+        });
 
         return json({
             success: true,
-            discountId: result.data?.discountAutomaticAppCreate?.automaticAppDiscount?.discountId,
+            discountId,
+            message: "Combo offer created successfully!",
         });
     } catch (error) {
         console.error("Error creating Combo:", error);
@@ -196,6 +243,7 @@ export default function ComboOffer() {
         selectedCollections: [], // New state
         giftProducts: [],
         volumeTiers: [{ minQty: "3", fixedPrice: "1499" }],
+        bogoTiers: [{ buyQty: "2", getQty: "1" }],
         message: "",
         startsAt: new Date().toISOString().split("T")[0],
         startTime: "00:00",
@@ -215,12 +263,16 @@ export default function ComboOffer() {
     useEffect(() => {
         if (actionData?.success) {
             setIsSubmitting(false);
-            shopify.toast.show("Combo offer created successfully!");
-            navigate("/app/offers");
-        } else if (actionData?.error) {
+            shopify.toast.show(actionData.message || "Offer created successfully!");
+            navigate("/app");
+        } else if (actionData?.error || actionData?.errors) {
             setIsSubmitting(false);
+            shopify.toast.show(
+                actionData.error || actionData.errors || "Failed to create offer",
+                { isError: true },
+            );
         }
-    }, [actionData, shopify, navigate]);
+    }, [actionData, navigate, shopify]);
 
     const handleChange = useCallback((field, value) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -298,18 +350,37 @@ export default function ComboOffer() {
         }));
     }, []);
 
+    const addBogoTier = useCallback(() => {
+        setFormData((prev) => ({
+            ...prev,
+            bogoTiers: [...prev.bogoTiers, { buyQty: "", getQty: "" }],
+        }));
+    }, []);
+
+    const removeBogoTier = useCallback((index) => {
+        setFormData((prev) => ({
+            ...prev,
+            bogoTiers: prev.bogoTiers.filter((_, i) => i !== index),
+        }));
+    }, []);
+
+    const updateBogoTier = useCallback((index, field, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            bogoTiers: prev.bogoTiers.map((t, i) =>
+                i === index ? { ...t, [field]: value } : t,
+            ),
+        }));
+    }, []);
+
     const handleSubmit = useCallback(
         (event) => {
-            event.preventDefault();
             if (!formData.title) {
+                event.preventDefault();
                 shopify.toast.show("Please enter a title", { isError: true });
                 return;
             }
             setIsSubmitting(true);
-            const form = event.target;
-            const input = form.querySelector('input[name="offerData"]');
-            input.value = JSON.stringify(formData);
-            form.submit();
         },
         [formData, shopify],
     );
@@ -335,12 +406,16 @@ export default function ComboOffer() {
         <Page
             title={subtypeInfo.title}
             subtitle={subtypeInfo.description}
-            backAction={{ content: "Offers", url: "/app/offers" }}
+            backAction={{ content: "Back", url: "/app" }}
         >
             <Layout>
                 <Layout.Section>
                     <Form method="post" onSubmit={handleSubmit}>
-                        <input type="hidden" name="offerData" value="" />
+                        <input
+                            type="hidden"
+                            name="offerData"
+                            value={JSON.stringify(formData)}
+                        />
                         <BlockStack gap="500">
                             {actionData?.error && (
                                 <Banner tone="critical">
@@ -454,6 +529,52 @@ export default function ComboOffer() {
                                 </Card>
                             )}
 
+                            {fields.includes("bogoTiers") && (
+                                <Card>
+                                    <BlockStack gap="400">
+                                        <InlineStack align="space-between">
+                                            <Text as="h2" variant="headingMd">
+                                                📊 Step 1: BOGO Tiers
+                                            </Text>
+                                            <Button onClick={addBogoTier}>Add Tier</Button>
+                                        </InlineStack>
+                                        {formData.bogoTiers.map((tier, index) => (
+                                            <InlineStack key={index} gap="300" blockAlign="end">
+                                                <div style={{ flex: 1 }}>
+                                                    <TextField
+                                                        label={`Tier ${index + 1}: Customer Buys`}
+                                                        type="number"
+                                                        value={tier.buyQty}
+                                                        onChange={(v) => updateBogoTier(index, "buyQty", v)}
+                                                        min="1"
+                                                        autoComplete="off"
+                                                    />
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <TextField
+                                                        label="Customer Gets Free"
+                                                        type="number"
+                                                        value={tier.getQty}
+                                                        onChange={(v) => updateBogoTier(index, "getQty", v)}
+                                                        min="1"
+                                                        autoComplete="off"
+                                                    />
+                                                </div>
+                                                {formData.bogoTiers.length > 1 && (
+                                                    <Button
+                                                        variant="plain"
+                                                        tone="critical"
+                                                        onClick={() => removeBogoTier(index)}
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                )}
+                                            </InlineStack>
+                                        ))}
+                                    </BlockStack>
+                                </Card>
+                            )}
+
                             {showExtraDiscount && (
                                 <Card>
                                     <BlockStack gap="400">
@@ -540,47 +661,6 @@ export default function ComboOffer() {
                                 </Card>
                             )}
 
-                            <Card>
-                                <BlockStack gap="400">
-                                    <Text as="h2" variant="headingMd">
-                                        Schedule
-                                    </Text>
-                                    <FormLayout>
-                                        <FormLayout.Group>
-                                            <TextField
-                                                label="Start Date"
-                                                type="date"
-                                                value={formData.startsAt}
-                                                onChange={(v) => handleChange("startsAt", v)}
-                                                autoComplete="off"
-                                            />
-                                            <TextField
-                                                label="Start Time"
-                                                type="time"
-                                                value={formData.startTime}
-                                                onChange={(v) => handleChange("startTime", v)}
-                                                autoComplete="off"
-                                            />
-                                        </FormLayout.Group>
-                                        <FormLayout.Group>
-                                            <TextField
-                                                label="End Date (optional)"
-                                                type="date"
-                                                value={formData.endsAt}
-                                                onChange={(v) => handleChange("endsAt", v)}
-                                                autoComplete="off"
-                                            />
-                                            <TextField
-                                                label="End Time"
-                                                type="time"
-                                                value={formData.endTime}
-                                                onChange={(v) => handleChange("endTime", v)}
-                                                autoComplete="off"
-                                            />
-                                        </FormLayout.Group>
-                                    </FormLayout>
-                                </BlockStack>
-                            </Card>
 
                             <Card>
                                 <BlockStack gap="400">
@@ -654,6 +734,16 @@ export default function ComboOffer() {
                                     {formData.volumeTiers.map((t, i) => (
                                         <Text key={i}>
                                             {t.minQty || "?"} items → ₹{t.fixedPrice || "?"}
+                                        </Text>
+                                    ))}
+                                </BlockStack>
+                            )}
+                            {fields.includes("bogoTiers") && (
+                                <BlockStack gap="100">
+                                    <Text tone="subdued">Tiers:</Text>
+                                    {formData.bogoTiers.map((t, i) => (
+                                        <Text key={i}>
+                                            Buy {t.buyQty || "?"} → Get {t.getQty || "?"} Free
                                         </Text>
                                     ))}
                                 </BlockStack>

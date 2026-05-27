@@ -21,6 +21,13 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useState, useEffect, useCallback } from "react";
 import { authenticate } from "../shopify.server";
 import { getProductsFromCollections } from "../utils/products.server";
+import prisma from "../db.server";
+
+// LOADER - Ensures the session is valid when the page loads
+export async function loader({ request }) {
+  await authenticate.admin(request);
+  return null;
+}
 
 // ============================================================================
 // SUBTYPE DEFINITIONS
@@ -64,7 +71,7 @@ const SUBTYPES = {
 // ============================================================================
 
 export async function action({ request }) {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const offerDataStr = formData.get("offerData");
 
@@ -74,6 +81,7 @@ export async function action({ request }) {
 
   try {
     const data = JSON.parse(offerDataStr);
+    const subtypeInfo = SUBTYPES[data.subtype] || SUBTYPES.fixed_bundle;
 
     // Helper to resolve products from collections
     const resolveProductIds = async (productIds, collectionIds) => {
@@ -107,7 +115,7 @@ export async function action({ request }) {
       originalSelectedCollections: data.selectedCollections,
     };
 
-    const functionId = process.env.SHOPIFY_BOGO_BUNDLES_FREE_GIFT_ID;
+    const functionId = process.env.SHOPIFY_TIER_PRICING_DISCOUNT_ID;
     if (!functionId) {
       return json({ success: false, error: "Function ID not configured in .env" }, { status: 500 });
     }
@@ -158,12 +166,46 @@ export async function action({ request }) {
 
     if (result.data?.discountAutomaticAppCreate?.userErrors?.length > 0) {
       const errors = result.data.discountAutomaticAppCreate.userErrors;
-      return json({ success: false, error: errors.map((e) => e.message).join(", ") });
+      return json({ success: false, errors: errors.map((e) => e.message).join(", ") });
     }
+
+    const discountId = result.data?.discountAutomaticAppCreate?.automaticAppDiscount?.discountId;
+
+    // Save to internal database
+    await prisma.offer.create({
+      data: {
+        title: data.title,
+        offerType: "volume_pricing",
+        triggerType: data.subtype === "cart_wide_volume" ? "order_value" : "products",
+        triggerIds: selectedProductIds,
+        minQty: data.volumeTiers?.[0]?.minQty ? parseInt(data.volumeTiers[0].minQty) : null,
+        
+        rewardType: subtypeInfo.tierType === "percentage" ? "percent" : "amount",
+        rewardValue: null, // Detailed in config
+        
+        combinesOrder: data.combinesOrder || false,
+        combinesProduct: data.combinesProduct || false,
+        combinesShipping: data.combinesShipping || false,
+        
+        startsAt: data.startsAt
+          ? new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`)
+          : new Date(),
+        endsAt: data.endsAt
+          ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
+          : null,
+          
+        status: "ACTIVE",
+        functionId,
+        discountId,
+        config: config,
+        shop: session.shop,
+      }
+    });
 
     return json({
       success: true,
-      discountId: result.data?.discountAutomaticAppCreate?.automaticAppDiscount?.discountId,
+      discountId,
+      message: "Volume pricing offer created successfully!",
     });
   } catch (error) {
     console.error("Error creating Volume Pricing:", error);
@@ -195,9 +237,9 @@ export default function VolumePricing() {
     percentageTiers: [{ minQty: "2", maxQty: "3", percentage: "10" }],
     message: "",
     startsAt: new Date().toISOString().split("T")[0],
-    startTime: "00:00",
-    endsAt: "",
-    endTime: "23:59",
+    startTime: new Date().toTimeString().slice(0, 5),
+    endsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    endTime: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toTimeString().slice(0, 5),
     combinesOrder: false,
     combinesProduct: false,
     combinesShipping: false,
@@ -212,12 +254,16 @@ export default function VolumePricing() {
   useEffect(() => {
     if (actionData?.success) {
       setIsSubmitting(false);
-      shopify.toast.show("Volume pricing offer created successfully!");
+      shopify.toast.show(actionData.message || "Offer created successfully!");
       navigate("/app/offers");
-    } else if (actionData?.error) {
+    } else if (actionData?.error || actionData?.errors) {
       setIsSubmitting(false);
+      shopify.toast.show(
+        actionData.error || actionData.errors || "Failed to create offer",
+        { isError: true },
+      );
     }
-  }, [actionData, shopify, navigate]);
+  }, [actionData, navigate, shopify]);
 
   const handleChange = useCallback((field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -325,16 +371,12 @@ export default function VolumePricing() {
 
   const handleSubmit = useCallback(
     (event) => {
-      event.preventDefault();
       if (!formData.title) {
+        event.preventDefault();
         shopify.toast.show("Please enter a title", { isError: true });
         return;
       }
       setIsSubmitting(true);
-      const form = event.target;
-      const input = form.querySelector('input[name="offerData"]');
-      input.value = JSON.stringify(formData);
-      form.submit();
     },
     [formData, shopify],
   );
@@ -357,12 +399,16 @@ export default function VolumePricing() {
     <Page
       title={subtypeInfo.title}
       subtitle={subtypeInfo.description}
-      backAction={{ content: "Offers", url: "/app/offers" }}
+      backAction={{ content: "Back", url: "/app" }}
     >
       <Layout>
         <Layout.Section>
           <Form method="post" onSubmit={handleSubmit}>
-            <input type="hidden" name="offerData" value="" />
+            <input
+              type="hidden"
+              name="offerData"
+              value={JSON.stringify(formData)}
+            />
             <BlockStack gap="500">
               {actionData?.error && (
                 <Banner tone="critical">
@@ -459,6 +505,7 @@ export default function VolumePricing() {
                             onChange={(v) => updatePercentageTier(index, "minQty", v)}
                             min="1"
                             autoComplete="off"
+                            helpText={<span style={{ visibility: "hidden" }}>spacer</span>}
                           />
                         </div>
                         <div style={{ flex: 1 }}>
@@ -481,16 +528,19 @@ export default function VolumePricing() {
                             min="1"
                             max="100"
                             autoComplete="off"
+                            helpText={<span style={{ visibility: "hidden" }}>spacer</span>}
                           />
                         </div>
                         {formData.percentageTiers.length > 1 && (
-                          <Button
-                            variant="plain"
-                            tone="critical"
-                            onClick={() => removePercentageTier(index)}
-                          >
-                            Remove
-                          </Button>
+                          <div style={{ marginBottom: "28px" }}>
+                            <Button
+                              variant="plain"
+                              tone="critical"
+                              onClick={() => removePercentageTier(index)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
                         )}
                       </InlineStack>
                     ))}
@@ -546,47 +596,6 @@ export default function VolumePricing() {
                 </Banner>
               )}
 
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingMd">
-                    Schedule
-                  </Text>
-                  <FormLayout>
-                    <FormLayout.Group>
-                      <TextField
-                        label="Start Date"
-                        type="date"
-                        value={formData.startsAt}
-                        onChange={(v) => handleChange("startsAt", v)}
-                        autoComplete="off"
-                      />
-                      <TextField
-                        label="Start Time"
-                        type="time"
-                        value={formData.startTime}
-                        onChange={(v) => handleChange("startTime", v)}
-                        autoComplete="off"
-                      />
-                    </FormLayout.Group>
-                    <FormLayout.Group>
-                      <TextField
-                        label="End Date (optional)"
-                        type="date"
-                        value={formData.endsAt}
-                        onChange={(v) => handleChange("endsAt", v)}
-                        autoComplete="off"
-                      />
-                      <TextField
-                        label="End Time"
-                        type="time"
-                        value={formData.endTime}
-                        onChange={(v) => handleChange("endTime", v)}
-                        autoComplete="off"
-                      />
-                    </FormLayout.Group>
-                  </FormLayout>
-                </BlockStack>
-              </Card>
 
               <Card>
                 <BlockStack gap="400">

@@ -13,6 +13,12 @@ import {
     Tabs,
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
+import { authenticate } from "../shopify.server";
+
+export async function loader({ request }) {
+    await authenticate.admin(request);
+    return null;
+}
 
 // ============================================================================
 // OFFER DEFINITIONS — All 24 Offer Types
@@ -45,7 +51,7 @@ const bogoOffers = [
     {
         id: "bogo_diff_product",
         title: "Buy X, Get Y (Different Product)",
-        description: "Buy a laptop, get a mouse free",
+        description: "Buy a laptop, get a mouse free — link any different products together",
         badge: null,
         icon: "🔗",
     },
@@ -91,17 +97,11 @@ const freeGiftOffers = [
     {
         id: "free_gift_product",
         title: "Free Gift on Product Purchase",
-        description: "Buy a shampoo, get a conditioner free",
+        description: "Buy a shampoo, get a conditioner free — incentivize specific product sales",
         badge: null,
         icon: "🧴",
     },
-    {
-        id: "free_gift_subscription",
-        title: "Free Gift on Subscription",
-        description: "Gift with first subscription order",
-        badge: null,
-        icon: "🔄",
-    },
+
     {
         id: "free_gift_mystery",
         title: "Mystery Gift",
@@ -134,7 +134,7 @@ const freeGiftOffers = [
     {
         id: "free_gift_time_limited",
         title: "Time-Limited Free Gift",
-        description: "Flash sale gifting with countdown timer",
+        description: "Flash sale gifting with countdown timer — create urgency and boost sales",
         badge: "Limited",
         badgeTone: "warning",
         icon: "⏰",
@@ -167,7 +167,7 @@ const volumeOffers = [
     {
         id: "cart_wide_volume",
         title: "Cart-Wide Volume Pricing",
-        description: "Bundle pricing applied to entire cart total",
+        description: "Bundle pricing applied to entire cart total — discount applied wide across the cart",
         badge: null,
         icon: "🛒",
     },
@@ -184,7 +184,7 @@ const comboOffers = [
     {
         id: "combo_bogo_discount",
         title: "BOGO + Discount Combo",
-        description: "Buy 1 get 1 free + 10% off rest of cart",
+        description: "Buy 1 get 1 free + 10% off rest of cart — stack different discount types",
         badge: "New",
         badgeTone: "info",
         icon: "🔥",
@@ -192,7 +192,7 @@ const comboOffers = [
     {
         id: "combo_bogo_gift",
         title: "BOGO + Gift",
-        description: "Buy 2, get 1 free + free mystery gift",
+        description: "Buy 2, get 1 free + free mystery gift — reward shoppers with freebies",
         badge: "New",
         badgeTone: "info",
         icon: "🎁",
@@ -200,7 +200,7 @@ const comboOffers = [
     {
         id: "combo_bundle_gift",
         title: "Bundle + Gift",
-        description: "Buy 3 products for ₹1,499 + free gift",
+        description: "Buy 3 products for ₹1,499 + free gift — package items with a free reward",
         badge: "New",
         badgeTone: "info",
         icon: "📦",
@@ -212,6 +212,7 @@ const comboOffers = [
 // ============================================================================
 
 function getOfferLink(offerId) {
+    if (offerId === "bogo_multi_tier") return `combo-offer?subtype=custom_multi_tier_bogo`;
     if (offerId.startsWith("bogo_")) return `buy-x-get-y?subtype=${offerId}`;
     if (offerId.startsWith("free_gift_")) return `free-gift?subtype=${offerId}`;
     if (offerId.startsWith("combo_")) return `combo-offer?subtype=${offerId}`;
@@ -241,9 +242,11 @@ function OfferCard({ offer, navigate }) {
                         {offer.title}
                     </Text>
 
-                    <Text as="p" variant="bodyMd" tone="subdued">
-                        {offer.description}
-                    </Text>
+                    <div style={{ minHeight: "40px" }}>
+                        <Text as="p" variant="bodyMd" tone="subdued">
+                            {offer.description}
+                        </Text>
+                    </div>
 
                     <InlineStack align="end">
                         <Button

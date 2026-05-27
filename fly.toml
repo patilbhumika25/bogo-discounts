@@ -8,6 +8,7 @@ primary_region = 'bom'
 
 [env]
   PORT = '3000'
+  HOST = '0.0.0.0'
   SHOPIFY_APP_URL = 'https://bogo-bundles-free-gifts-app.fly.dev'
   SHOPIFY_API_KEY = 'e38c9e6463e93e5c12ec9b3249729d15'
   SCOPES = 'write_discounts,write_products'
@@ -27,3 +28,7 @@ primary_region = 'bom'
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
+
+[mounts]
+  source = "bogo_data"
+  destination = "/data"

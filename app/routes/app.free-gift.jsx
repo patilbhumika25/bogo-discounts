@@ -1,5 +1,5 @@
 import { json } from "@remix-run/node";
-import { useNavigate, useActionData, Form } from "@remix-run/react";
+import { useNavigate, useActionData, Form, useSearchParams } from "@remix-run/react";
 import {
   Page,
   BlockStack,
@@ -25,8 +25,14 @@ import { CaretUpIcon, CaretDownIcon } from "@shopify/polaris-icons";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useState, useEffect, useCallback } from "react";
 
-// import prisma from "../db.server";
+import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
+
+// LOADER - Ensures the session is valid when the page loads
+export async function loader({ request }) {
+  await authenticate.admin(request);
+  return null;
+}
 
 // SERVER-SIDE ACTION
 export async function action({ request }) {
@@ -50,55 +56,55 @@ export async function action({ request }) {
     let rewardValue = null;
 
     // Save in DB with enhanced fields for different gift types
-    // const offer = await prisma.offer.create({
-    //   data: {
-    //     title: data.title,
-    //     offerType: data.offerType, // New field for offer type
+    const offer = await prisma.offer.create({
+      data: {
+        title: data.title,
+        offerType: data.offerType, // New field for offer type
 
-    //     // Trigger configuration
-    //     triggerType: data.triggerType, // 'order_value', 'products', 'collections', 'subscription'
-    //     triggerIds: data.triggerType === "products"
-    //       ? data.selectedProducts.map((p) => p.id)
-    //       : data.triggerType === "collections"
-    //       ? data.selectedCollections.map((c) => c.id)
-    //       : [],
-    //     minOrderValue: data.minOrderValue ? parseFloat(data.minOrderValue) : null,
-    //     minQty: data.minQuantity ? parseInt(data.minQuantity, 10) : 1,
+        // Trigger configuration
+        triggerType: data.triggerType, // 'order_value', 'products', 'collections', 'subscription'
+        triggerIds: data.triggerType === "products"
+          ? data.selectedProducts.map((p) => p.id)
+          : data.triggerType === "collections"
+          ? data.selectedCollections.map((c) => c.id)
+          : [],
+        minOrderValue: data.minOrderValue ? parseFloat(data.minOrderValue) : null,
+        minQty: data.minQuantity ? parseInt(data.minQuantity, 10) : 1,
 
-    //     // Gift configuration
-    //     rewardType,
-    //     rewardValue,
-    //     rewardApplyTo: "selected",
-    //     rewardIds: data.giftProducts.map((p) => p.id),
-    //     rewardQty: parseInt(data.giftQuantity, 10) || 1,
+        // Gift configuration
+        rewardType,
+        rewardValue,
+        rewardApplyTo: "selected",
+        rewardIds: data.giftProducts.map((p) => p.id),
+        rewardQty: parseInt(data.giftQuantity, 10) || 1,
 
-    //     // Gift selection options
-    //     giftSelectionType: data.giftSelectionType, // 'auto', 'single_choice', 'multi_choice', 'mystery'
-    //     maxGiftSelection: data.maxGiftSelection ? parseInt(data.maxGiftSelection) : null,
-    //     isMysteryGift: data.giftSelectionType === 'mystery',
+        // Gift selection options
+        giftSelectionType: data.giftSelectionType, // 'auto', 'single_choice', 'multi_choice', 'mystery'
+        maxGiftSelection: data.maxGiftSelection ? parseInt(data.maxGiftSelection) : null,
+        isMysteryGift: data.giftSelectionType === 'mystery',
 
-    //     // Time-limited options
-    //     isTimeLimited: data.isTimeLimited || false,
-    //     timeLimit: data.timeLimit ? parseInt(data.timeLimit) : null,
-    //     timeLimitUnit: data.timeLimitUnit || 'hours',
+        // Time-limited options
+        isTimeLimited: data.isTimeLimited || false,
+        timeLimit: data.timeLimit ? parseInt(data.timeLimit) : null,
+        timeLimitUnit: data.timeLimitUnit || 'hours',
 
-    //     combinesOrder: data.combines?.orderDiscounts || false,
-    //     combinesProduct: data.combines?.productDiscounts || false,
-    //     combinesShipping: data.combines?.shippingDiscounts || false,
+        combinesOrder: data.combines?.orderDiscounts || false,
+        combinesProduct: data.combines?.productDiscounts || false,
+        combinesShipping: data.combines?.shippingDiscounts || false,
 
-    //     limitTotalUses: data.usageLimits?.includes("limit_total") || null,
-    //     limitPerCustomer: data.usageLimits?.includes("limit_per_customer") || false,
+        limitTotalUses: data.usageLimits?.includes("limit_total") || null,
+        limitPerCustomer: data.usageLimits?.includes("limit_per_customer") || false,
 
-    //     startsAt: new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`),
-    //     endsAt: data.endsAt
-    //       ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
-    //       : null,
+        startsAt: new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`),
+        endsAt: data.endsAt
+          ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
+          : null,
 
-    //     functionId: "0199377a-e148-7a61-bedb-f7d25bd5d3ab",
-    //     status: "DRAFT",
-    //     shop: shop,
-    //   },
-    // });
+        functionId: process.env.SHOPIFY_BOGO_BUNDLES_FREE_GIFT_ID || "0199379e-57e6-73a8-91df-bbb1eb0183f8",
+        status: "DRAFT",
+        shop: shop,
+      },
+    });
 
     console.log('save in db')
 
@@ -133,13 +139,45 @@ export async function action({ request }) {
     let customerBuys = {};
 
     if (data.triggerType === "order_value") {
+      let items = { all: true };
+      
+      if (data.applyTo === "products") {
+        items = { products: { productsToAdd: data.selectedProducts.map(p => p.id) } };
+      } else if (data.applyTo === "collections") {
+        items = { collections: { add: data.selectedCollections.map(c => c.id) } };
+      } else {
+        // Fallback for "All Products" in BXGY: Fetch all collections
+        try {
+          const collectionsResponse = await admin.graphql(`
+            query {
+              collections(first: 250) {
+                edges {
+                  node {
+                    id
+                  }
+                }
+              }
+            }
+          `);
+          const collectionsData = await collectionsResponse.json();
+          const collectionIds = collectionsData.data?.collections?.edges?.map(e => e.node.id) || [];
+          
+          if (collectionIds.length > 0) {
+            items = { collections: { add: collectionIds } };
+          } else {
+            items = { all: true }; // Fallback if no collections found
+          }
+        } catch (error) {
+          console.error("Error fetching collections:", error);
+          items = { all: true };
+        }
+      }
+
       customerBuys = {
         value: {
-          amount: data.minOrderValue,
+          amount: parseFloat(data.minOrderValue).toString(),
         },
-        items: {
-          all: true,
-        },
+        items: items,
       };
     } else if (data.triggerType === "products") {
       customerBuys = {
@@ -199,8 +237,8 @@ export async function action({ request }) {
         customerGets: {
           value: {
             discountOnQuantity: {
-              quantity: data.giftQuantity.toString(),
-              effect: { percentage: 1 }, // 100% off for free gift
+              quantity: (data.giftQuantity || 1).toString(),
+              effect: { percentage: 1.0 }, // 100% off for free gift
             },
           },
           items: {
@@ -265,10 +303,27 @@ export default function FreeGiftOffer() {
   const navigate = useNavigate();
   const shopify = useAppBridge();
   const actionData = useActionData();
+  const [searchParams] = useSearchParams();
+
+  const subtypeParam = searchParams.get("subtype") || "free_gift_order_value";
+
+  const getOfferTypeFromSubtype = (subtype) => {
+    switch (subtype) {
+      case "free_gift_order_value": return "order_value_gift";
+      case "free_gift_product": return "product_gift";
+      case "free_gift_subscription": return "subscription_gift";
+      case "free_gift_mystery": return "mystery_gift";
+      case "free_gift_auto": return "auto_add_gift";
+      case "free_gift_choice": return "gift_choice_single";
+      case "free_gift_multi_choice": return "gift_choice_multi";
+      case "free_gift_time_limited": return "time_limited_gift";
+      default: return "order_value_gift";
+    }
+  };
 
   const [formData, setFormData] = useState({
     title: "Free Gift Offer #1",
-    offerType: "order_value_gift", // Default offer type
+    offerType: getOfferTypeFromSubtype(subtypeParam), // Correctly pre-initialized from subtype!
 
     // Trigger configuration
     triggerType: "order_value", // 'order_value', 'products', 'collections', 'subscription'
@@ -284,7 +339,7 @@ export default function FreeGiftOffer() {
     maxGiftSelection: "1",
 
     // Time-limited options
-    isTimeLimited: false,
+    isTimeLimited: subtypeParam === "free_gift_time_limited",
     timeLimit: "",
     timeLimitUnit: "hours",
 
@@ -296,10 +351,10 @@ export default function FreeGiftOffer() {
 
     usageLimits: [],
     customerEligibility: "all",
-    startsAt: "",
-    startTime: "",
-    endsAt: "",
-    endTime: "",
+    startsAt: new Date().toISOString().split("T")[0],
+    startTime: new Date().toTimeString().slice(0, 5),
+    endsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    endTime: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toTimeString().slice(0, 5),
   });
 
   const [openSections, setOpenSections] = useState({
@@ -320,6 +375,13 @@ export default function FreeGiftOffer() {
     { label: "Gift with Choice (Single)", value: "gift_choice_single" },
     { label: "Gift with Multi-Choice", value: "gift_choice_multi" },
     { label: "Time-Limited Gift", value: "time_limited_gift" },
+  ];
+
+  const giftSelectionOptions = [
+    { label: "Auto-Add (Gift is automatically added)", value: "auto" },
+    { label: "Single Choice (Customer picks 1 gift)", value: "single_choice" },
+    { label: "Multi-Choice (Customer picks multiple)", value: "multi_choice" },
+    { label: "Mystery Gift (Hidden until checkout)", value: "mystery" },
   ];
 
   // Update trigger type and selection type based on offer type
@@ -390,36 +452,56 @@ export default function FreeGiftOffer() {
   useEffect(() => {
     if (actionData?.success) {
       setIsSubmitting(false);
-      setTimeout(() => {
-        navigate("/app");
-      }, 2000);
-    } else if (actionData?.error) {
+      shopify.toast.show(actionData.message || "Offer created successfully!");
+      navigate("/app");
+    } else if (actionData?.errors) {
       setIsSubmitting(false);
+      shopify.toast.show(
+        typeof actionData.errors === "string"
+          ? actionData.errors
+          : "Failed to create offer. Please check the form.",
+        { isError: true },
+      );
     }
-  }, [actionData, navigate]);
+  }, [actionData, navigate, shopify]);
 
   const handleToggle = (key) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  // Open collection picker
+  const openCollectionPicker = async () => {
+    try {
+      const selected = await shopify.resourcePicker({
+        type: "collection",
+        multiple: true,
+        action: "select",
+      });
+
+      if (selected && selected.length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          selectedCollections: selected,
+        }));
+      }
+    } catch (error) {
+      console.error("Resource Picker Error:", error);
+    }
+  };
+
   // Open trigger picker (products/collections)
   const openTriggerPicker = async () => {
     try {
-      if (
-        formData.triggerType === "products" ||
-        formData.triggerType === "subscription"
-      ) {
-        const selected = await shopify.resourcePicker({
-          type: "product",
-          multiple: true,
-          action: "select",
-        });
+      const selected = await shopify.resourcePicker({
+        type: "product",
+        multiple: true,
+        action: "select",
+      });
 
-        if (selected && selected.length > 0) {
-          setFormData((prev) => ({
-            ...prev,
-            selectedProducts: selected,
-          }));
-        }
+      if (selected && selected.length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          selectedProducts: selected,
+        }));
       } else if (formData.triggerType === "collections") {
         const selected = await shopify.resourcePicker({
           type: "collection",
@@ -540,17 +622,54 @@ export default function FreeGiftOffer() {
   const renderTriggerSection = () => {
     if (formData.triggerType === "order_value") {
       return (
-        <TextField
-          type="number"
-          label="Minimum order value"
-          value={formData.minOrderValue}
-          onChange={(val) => handleChange("minOrderValue", val)}
-          autoComplete="off"
-          prefix="₹"
-          min="0"
-          helpText="Customer must spend this amount to qualify for the gift"
-          required
-        />
+        <BlockStack gap="400">
+          <TextField
+            type="number"
+            label="Minimum order value"
+            value={formData.minOrderValue}
+            onChange={(val) => handleChange("minOrderValue", val)}
+            autoComplete="off"
+            prefix="₹"
+            min="0"
+            helpText="Customer must spend this amount to qualify for the gift"
+            required
+          />
+          
+          <Select
+            label="Apply to"
+            options={[
+              { label: "All Products", value: "all" },
+              { label: "Specific Products", value: "products" },
+              { label: "Specific Collections", value: "collections" },
+            ]}
+            value={formData.applyTo || "all"}
+            onChange={(val) => handleChange("applyTo", val)}
+          />
+
+          {(formData.applyTo === "products") && (
+            <div style={{ marginTop: "10px" }}>
+              <Button onClick={openTriggerPicker}>Browse Products</Button>
+            </div>
+          )}
+
+          {(formData.applyTo === "collections") && (
+            <div style={{ marginTop: "10px" }}>
+              <Button onClick={openCollectionPicker}>Browse Collections</Button>
+            </div>
+          )}
+
+          {formData.applyTo === "products" && formData.selectedProducts.length > 0 && (
+             <div style={{ marginTop: "10px" }}>
+                <Text variant="bodyMd" as="p">{formData.selectedProducts.length} products selected</Text>
+             </div>
+          )}
+
+          {formData.applyTo === "collections" && formData.selectedCollections.length > 0 && (
+             <div style={{ marginTop: "10px" }}>
+                <Text variant="bodyMd" as="p">{formData.selectedCollections.length} collections selected</Text>
+             </div>
+          )}
+        </BlockStack>
       );
     }
 
@@ -786,12 +905,12 @@ export default function FreeGiftOffer() {
                   </BlockStack>
                 </Card>
 
-                {/* Trigger Conditions */}
+                {/* Customer Buys */}
                 <Card>
                   <BlockStack gap="400">
                     <InlineStack align="space-between">
                       <Text as="h2" variant="headingSm" fontWeight="medium">
-                        Trigger Conditions
+                        Customer Buys
                       </Text>
                       <Badge>
                         {formData.triggerType === "order_value"
@@ -825,6 +944,14 @@ export default function FreeGiftOffer() {
                       </Badge>
                     </InlineStack>
 
+                    <Select
+                      label="Selection Mode"
+                      options={giftSelectionOptions}
+                      value={formData.giftSelectionType}
+                      onChange={(val) => handleChange("giftSelectionType", val)}
+                      helpText="Choose how the customer receives or selects their gift"
+                    />
+
                     <InlineStack gap="400" wrap>
                       <div style={{ flex: 1, minWidth: "150px" }}>
                         <TextField
@@ -847,6 +974,22 @@ export default function FreeGiftOffer() {
                           required
                         />
                       </div>
+
+                      {formData.giftSelectionType === "multi_choice" && (
+                        <div style={{ flex: 1, minWidth: "150px" }}>
+                          <TextField
+                            type="number"
+                            label="Max selection"
+                            value={formData.maxGiftSelection}
+                            onChange={(val) => handleChange("maxGiftSelection", val)}
+                            autoComplete="off"
+                            min="1"
+                            helpText="How many gifts can the customer pick?"
+                            required
+                          />
+                        </div>
+                      )}
+
                       <div style={{ alignSelf: "end", minWidth: "120px" }}>
                         <Button
                           onClick={openGiftPicker}
@@ -1003,133 +1146,56 @@ export default function FreeGiftOffer() {
                   </BlockStack>
                 </Card>
 
-                {/* Usage Limits */}
-                <Card>
-                  <BlockStack gap="400">
-                    <InlineStack align="space-between">
-                      <Text as="h3" variant="headingSm" fontWeight="semibold">
-                        Maximum discount uses
-                      </Text>
-                      <p
-                        onClick={() => handleToggle("section1")}
-                        style={{ cursor: "pointer" }}
-                      >
-                        <Icon
-                          source={
-                            openSections.section1 ? CaretUpIcon : CaretDownIcon
-                          }
-                          tone="base"
-                        />
-                      </p>
-                    </InlineStack>
-                    <Collapsible open={openSections.section1}>
-                      <ChoiceList
-                        allowMultiple
-                        title=""
-                        choices={[
-                          {
-                            label: "Limit total number of uses",
-                            value: "limit_total",
-                            helpText:
-                              "Set a maximum number of times this discount can be used",
-                          },
-                          {
-                            label: "Limit to one use per customer",
-                            value: "limit_per_customer",
-                            helpText:
-                              "Allow each customer to use this discount only once",
-                          },
-                        ]}
-                        selected={formData.usageLimits}
-                        onChange={(val) => handleChange("usageLimits", val)}
-                      />
-                    </Collapsible>
-                  </BlockStack>
-                </Card>
 
-                {/* Customer Eligibility */}
-                <Card>
-                  <BlockStack gap="400">
-                    <InlineStack align="space-between">
-                      <Text as="h2" variant="headingSm" fontWeight="semibold">
-                        Customer eligibility
-                      </Text>
-                      <p
-                        onClick={() => handleToggle("section2")}
-                        style={{ cursor: "pointer" }}
-                      >
-                        <Icon
-                          source={
-                            openSections.section2 ? CaretUpIcon : CaretDownIcon
-                          }
-                          tone="base"
-                        />
-                      </p>
-                    </InlineStack>
-                    <Collapsible open={openSections.section2}>
-                      <ChoiceList
-                        title=""
-                        choices={[
-                          { label: "All customers", value: "all" },
-                          { label: "Customer segment", value: "segment" },
-                          { label: "Specific link", value: "link" },
-                          { label: "Customer location", value: "location" },
-                        ]}
-                        selected={[formData.customerEligibility]}
-                        onChange={(val) =>
-                          handleChange("customerEligibility", val[0])
-                        }
-                      />
-                    </Collapsible>
-                  </BlockStack>
-                </Card>
 
                 {/* Schedule */}
-                <Card>
-                  <BlockStack gap="400">
-                    <Text as="h2" variant="headingSm" fontWeight="medium">
-                      Schedule
-                    </Text>
-                    <FormLayout>
-                      <FormLayout.Group>
-                        <div style={{ maxWidth: "150px" }}>
-                          <TextField
-                            type="date"
-                            label="Start date"
-                            value={formData.startsAt}
-                            onChange={(val) => handleChange("startsAt", val)}
-                            required
-                          />
-                        </div>
-                        <div style={{ maxWidth: "100px" }}>
-                          <TextField
-                            type="time"
-                            label="Start time"
-                            value={formData.startTime}
-                            onChange={(val) => handleChange("startTime", val)}
-                            required
-                          />
-                        </div>
-                        <div style={{ maxWidth: "150px" }}>
-                          <TextField
-                            type="date"
-                            label="End date"
-                            value={formData.endsAt}
-                            onChange={(val) => handleChange("endsAt", val)}
-                          />
-                        </div>
-                        <div style={{ maxWidth: "100px" }}>
-                          <TextField
-                            type="time"
-                            label="End time"
-                            value={formData.endTime}
-                            onChange={(val) => handleChange("endTime", val)}
-                          />
-                        </div>
-                      </FormLayout.Group>
-                    </FormLayout>
-                  </BlockStack>
-                </Card>
+                {formData.offerType === "time_limited_gift" && (
+                  <Card>
+                    <BlockStack gap="400">
+                      <Text as="h2" variant="headingSm" fontWeight="medium">
+                        Schedule
+                      </Text>
+                      <FormLayout>
+                        <FormLayout.Group>
+                          <div style={{ maxWidth: "150px" }}>
+                            <TextField
+                              type="date"
+                              label="Start date"
+                              value={formData.startsAt}
+                              onChange={(val) => handleChange("startsAt", val)}
+                              required
+                            />
+                          </div>
+                          <div style={{ maxWidth: "100px" }}>
+                            <TextField
+                              type="time"
+                              label="Start time"
+                              value={formData.startTime}
+                              onChange={(val) => handleChange("startTime", val)}
+                              required
+                            />
+                          </div>
+                          <div style={{ maxWidth: "150px" }}>
+                            <TextField
+                              type="date"
+                              label="End date"
+                              value={formData.endsAt}
+                              onChange={(val) => handleChange("endsAt", val)}
+                            />
+                          </div>
+                          <div style={{ maxWidth: "100px" }}>
+                            <TextField
+                              type="time"
+                              label="End time"
+                              value={formData.endTime}
+                              onChange={(val) => handleChange("endTime", val)}
+                            />
+                          </div>
+                        </FormLayout.Group>
+                      </FormLayout>
+                    </BlockStack>
+                  </Card>
+                )}
 
                 {/* Submit Button */}
                 <InlineStack align="end">
