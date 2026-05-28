@@ -971,48 +971,7 @@ export default function BuyXGetY() {
                       />
                     </BlockStack>
 
-                    <BlockStack gap="400">
-                      <InlineStack align="space-between">
-                        <Text as="h3" variant="headingSm" fontWeight="semibold">
-                          Maximum discount uses
-                        </Text>
-                        <p
-                          onClick={() => handleToggle("section1")}
-                          style={{ cursor: "pointer" }}
-                        >
-                          <Icon
-                            source={
-                              openSections.section1
-                                ? CaretUpIcon
-                                : CaretDownIcon
-                            }
-                            tone="base"
-                          />
-                        </p>
-                      </InlineStack>
-                      <Collapsible open={openSections.section1}>
-                        <ChoiceList
-                          allowMultiple
-                          title=""
-                          choices={[
-                            {
-                              label: "Limit total number of uses",
-                              value: "limit_total",
-                              helpText:
-                                "Set a maximum number of times this discount can be used",
-                            },
-                            {
-                              label: "Limit to one use per customer",
-                              value: "limit_per_customer",
-                              helpText:
-                                "Allow each customer to use this discount only once",
-                            },
-                          ]}
-                          selected={formData.usageLimits}
-                          onChange={(val) => handleChange("usageLimits", val)}
-                        />
-                      </Collapsible>
-                    </BlockStack>
+
                   </BlockStack>
                 </Card>
 
