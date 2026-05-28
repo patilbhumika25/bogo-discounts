@@ -1016,42 +1016,7 @@ export default function BuyXGetY() {
                   </BlockStack>
                 </Card>
 
-                {/* Customer Eligibility */}
-                <Card>
-                  <BlockStack gap="400">
-                    <InlineStack align="space-between">
-                      <Text as="h2" variant="headingSm" fontWeight="semibold">
-                        Customer eligibility
-                      </Text>
-                      <p
-                        onClick={() => handleToggle("section2")}
-                        style={{ cursor: "pointer" }}
-                      >
-                        <Icon
-                          source={
-                            openSections.section2 ? CaretUpIcon : CaretDownIcon
-                          }
-                          tone="base"
-                        />
-                      </p>
-                    </InlineStack>
-                    <Collapsible open={openSections.section2}>
-                      <ChoiceList
-                        title=""
-                        choices={[
-                          { label: "All customers", value: "all" },
-                          { label: "Customer segment", value: "segment" },
-                          { label: "Specific link", value: "link" },
-                          { label: "Customer location", value: "location" },
-                        ]}
-                        selected={[formData.customerEligibility]}
-                        onChange={(val) =>
-                          handleChange("customerEligibility", val[0])
-                        }
-                      />
-                    </Collapsible>
-                  </BlockStack>
-                </Card>
+
 
                 {/* Submit Button */}
                 <InlineStack align="end">
