@@ -369,7 +369,6 @@ export default function FreeGiftOffer() {
   const offerTypeOptions = [
     { label: "Free Gift on Order Value", value: "order_value_gift" },
     { label: "Free Gift on Product Purchase", value: "product_gift" },
-    { label: "Free Gift on Subscription", value: "subscription_gift" },
     { label: "Mystery Gift", value: "mystery_gift" },
     { label: "Auto-Add Gift", value: "auto_add_gift" },
     { label: "Gift with Choice (Single)", value: "gift_choice_single" },
@@ -1148,54 +1147,7 @@ export default function FreeGiftOffer() {
 
 
 
-                {/* Schedule */}
-                {formData.offerType === "time_limited_gift" && (
-                  <Card>
-                    <BlockStack gap="400">
-                      <Text as="h2" variant="headingSm" fontWeight="medium">
-                        Schedule
-                      </Text>
-                      <FormLayout>
-                        <FormLayout.Group>
-                          <div style={{ maxWidth: "150px" }}>
-                            <TextField
-                              type="date"
-                              label="Start date"
-                              value={formData.startsAt}
-                              onChange={(val) => handleChange("startsAt", val)}
-                              required
-                            />
-                          </div>
-                          <div style={{ maxWidth: "100px" }}>
-                            <TextField
-                              type="time"
-                              label="Start time"
-                              value={formData.startTime}
-                              onChange={(val) => handleChange("startTime", val)}
-                              required
-                            />
-                          </div>
-                          <div style={{ maxWidth: "150px" }}>
-                            <TextField
-                              type="date"
-                              label="End date"
-                              value={formData.endsAt}
-                              onChange={(val) => handleChange("endsAt", val)}
-                            />
-                          </div>
-                          <div style={{ maxWidth: "100px" }}>
-                            <TextField
-                              type="time"
-                              label="End time"
-                              value={formData.endTime}
-                              onChange={(val) => handleChange("endTime", val)}
-                            />
-                          </div>
-                        </FormLayout.Group>
-                      </FormLayout>
-                    </BlockStack>
-                  </Card>
-                )}
+
 
                 {/* Submit Button */}
                 <InlineStack align="end">
@@ -1292,14 +1244,7 @@ export default function FreeGiftOffer() {
                 </Text>
               </div>
 
-              <div>
-                <Text as="h5" variant="headingXs" fontWeight="medium">
-                  Subscription Gift
-                </Text>
-                <Text as="p" variant="bodySm" color="subdued">
-                  Subscribe to any product, get a welcome kit free
-                </Text>
-              </div>
+
 
               <div>
                 <Text as="h5" variant="headingXs" fontWeight="medium">
@@ -1362,10 +1307,7 @@ export default function FreeGiftOffer() {
                 ⏰ <strong>Time-limited</strong> offers create urgency and boost
                 sales
               </Text>
-              <Text as="p" variant="bodySm">
-                🔄 <strong>Subscription gifts</strong> encourage recurring
-                revenue
-              </Text>
+
               <Text as="p" variant="bodySm">
                 🎯 Set minimum order values strategically to increase AOV
               </Text>
