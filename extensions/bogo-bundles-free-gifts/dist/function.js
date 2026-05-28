@@ -153,9 +153,10 @@ function cartLinesDiscountsGenerateRun(input) {
         });
       }
     });
-    const eligibleItems = allItems.filter((item) => item.isEligible);
+    const eligibleItems = allItems.filter((item) => item.isEligible && !item.isGift);
     const candidates = [];
-    if (eligibleItems.length >= bogoSize) {
+    const giftItems = allItems.filter((item) => item.isGift);
+    if (eligibleItems.length >= bogoSize && giftItems.length >= 1) {
       eligibleItems.sort((a, b) => b.price - a.price);
       const bogoPaidItems = eligibleItems.slice(0, buyQty);
       const bogoFreeItems = eligibleItems.slice(-getQty);
@@ -168,8 +169,8 @@ function cartLinesDiscountsGenerateRun(input) {
         }
         bogoLineDiscounts[freeItem.lineId] += freeItem.price;
       });
-      const giftItems = allItems.filter((item) => item.isGift && !bogoFreeIds.has(item.uniqueId));
-      giftItems.forEach((giftItem) => {
+      const bogoGiftItems = giftItems.filter((item) => !bogoFreeIds.has(item.uniqueId));
+      bogoGiftItems.forEach((giftItem) => {
         if (!giftLineDiscounts[giftItem.lineId]) {
           giftLineDiscounts[giftItem.lineId] = 0;
         }
@@ -234,6 +235,7 @@ function cartLinesDiscountsGenerateRun(input) {
       }
     });
     const eligibleItems = allItems.filter((item) => item.isEligible && !item.isGift);
+    const giftItems = allItems.filter((item) => item.isGift);
     let applicableTier = null;
     for (const tier of sortedTiers) {
       if (eligibleItems.length >= parseInt(tier.minQty)) {
@@ -242,7 +244,7 @@ function cartLinesDiscountsGenerateRun(input) {
       }
     }
     const candidates = [];
-    if (applicableTier) {
+    if (applicableTier && giftItems.length >= 1) {
       const minQty = parseInt(applicableTier.minQty);
       const fixedPrice = parseFloat(applicableTier.fixedPrice);
       eligibleItems.sort((a, b) => b.price - a.price);
@@ -276,7 +278,6 @@ function cartLinesDiscountsGenerateRun(input) {
           });
         }
       }
-      const giftItems = allItems.filter((item) => item.isGift);
       const giftLineDiscounts = {};
       giftItems.forEach((giftItem) => {
         if (!giftLineDiscounts[giftItem.lineId]) {

@@ -115,16 +115,33 @@
            });
            conditionMet = eligibleCount >= minQty;
         } else if (isBogoGiftOffer || isBundleGiftOffer) {
-           // Basic check for hybrid offers. We assume the backend Shopify Function handles the exact discount,
-           // we just need to ensure the gift is in the cart. We'll simplify the check here to just see if the trigger products are present.
            const triggerIds = (config.selectedProducts || []).map(p => p.id.split('/').pop());
            let eligibleCount = 0;
            cart.items.forEach(item => {
-             if (triggerIds.length === 0 || triggerIds.includes(item.product_id.toString())) {
-               if (!giftProductIds.includes(item.product_id.toString())) eligibleCount += item.quantity;
+             if (config.applyTo === "any" || triggerIds.length === 0 || triggerIds.includes(item.product_id.toString())) {
+               if (!giftProductIds.includes(item.product_id.toString())) {
+                 eligibleCount += item.quantity;
+               }
              }
            });
-           conditionMet = eligibleCount >= (parseInt(config.buyQty) || parseInt(config.minQty) || 1);
+
+           let requiredQty = 1;
+           if (isBogoGiftOffer) {
+             requiredQty = (parseInt(config.buyQty) || 1) + (parseInt(config.getQty) || 1);
+           } else if (isBundleGiftOffer) {
+             let minQty = 999999;
+             if (config.volumeTiers && config.volumeTiers.length > 0) {
+               config.volumeTiers.forEach(tier => {
+                 const q = parseInt(tier.minQty) || 0;
+                 if (q > 0 && q < minQty) {
+                   minQty = q;
+                 }
+               });
+             }
+             requiredQty = minQty !== 999999 ? minQty : 1;
+           }
+
+           conditionMet = eligibleCount >= requiredQty;
         }
 
         // --- MYSTERY GIFT STOREFRONT HIDING ---

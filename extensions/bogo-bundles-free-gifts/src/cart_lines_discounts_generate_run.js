@@ -187,11 +187,13 @@ export function cartLinesDiscountsGenerateRun(input) {
       }
     });
 
-    const eligibleItems = allItems.filter(item => item.isEligible);
+    const eligibleItems = allItems.filter(item => item.isEligible && !item.isGift);
     const candidates = [];
 
-    // The offer only applies if we have enough eligible items for BOGO
-    if (eligibleItems.length >= bogoSize) {
+    const giftItems = allItems.filter(item => item.isGift);
+
+    // The offer only applies if we have enough eligible items for BOGO and the free gift is present in the cart
+    if (eligibleItems.length >= bogoSize && giftItems.length >= 1) {
       // Sort eligible items by price descending
       eligibleItems.sort((a, b) => b.price - a.price);
 
@@ -212,8 +214,8 @@ export function cartLinesDiscountsGenerateRun(input) {
       });
 
       // 2. Free Gift items (exclude BOGO free items if they overlap)
-      const giftItems = allItems.filter(item => item.isGift && !bogoFreeIds.has(item.uniqueId));
-      giftItems.forEach(giftItem => {
+      const bogoGiftItems = giftItems.filter(item => !bogoFreeIds.has(item.uniqueId));
+      bogoGiftItems.forEach(giftItem => {
         if (!giftLineDiscounts[giftItem.lineId]) {
           giftLineDiscounts[giftItem.lineId] = 0;
         }
@@ -293,6 +295,7 @@ export function cartLinesDiscountsGenerateRun(input) {
     });
 
     const eligibleItems = allItems.filter(item => item.isEligible && !item.isGift);
+    const giftItems = allItems.filter(item => item.isGift);
 
     let applicableTier = null;
     for (const tier of sortedTiers) {
@@ -304,7 +307,7 @@ export function cartLinesDiscountsGenerateRun(input) {
 
     const candidates = [];
 
-    if (applicableTier) {
+    if (applicableTier && giftItems.length >= 1) {
       const minQty = parseInt(applicableTier.minQty);
       const fixedPrice = parseFloat(applicableTier.fixedPrice);
 
@@ -346,7 +349,6 @@ export function cartLinesDiscountsGenerateRun(input) {
         }
       }
 
-      const giftItems = allItems.filter(item => item.isGift);
       const giftLineDiscounts = {};
 
       giftItems.forEach(giftItem => {
