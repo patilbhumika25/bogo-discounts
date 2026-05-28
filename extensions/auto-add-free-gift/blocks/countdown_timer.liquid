@@ -1,0 +1,142 @@
+{% schema %}
+{
+  "name": "Offer Countdown Timer",
+  "target": "section",
+  "settings": [
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "Background Color",
+      "default": "#fde8e8"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text Color",
+      "default": "#9b1c1c"
+    }
+  ]
+}
+{% endschema %}
+
+<style>
+  .bogo-countdown-container {
+    display: none; /* hidden until active offer loads */
+    background-color: {{ block.settings.bg_color }};
+    color: {{ block.settings.text_color }};
+    padding: 12px 20px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: bold;
+    margin: 16px 0;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    font-family: inherit;
+  }
+  .bogo-countdown-message {
+    margin-bottom: 8px;
+    font-size: 16px;
+  }
+  .bogo-countdown-timer {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+  }
+  .bogo-timer-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .bogo-timer-val {
+    font-size: 24px;
+    line-height: 1;
+    background: rgba(255,255,255,0.5);
+    padding: 6px 10px;
+    border-radius: 4px;
+    min-width: 44px;
+  }
+  .bogo-timer-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+  }
+</style>
+
+<div id="bogoCountdown-{{ block.id }}" class="bogo-countdown-container">
+  <div class="bogo-countdown-message" id="bogoMessage-{{ block.id }}">Hurry! Flash Sale Ends In:</div>
+  <div class="bogo-countdown-timer">
+    <div class="bogo-timer-box">
+      <span class="bogo-timer-val" id="bogoDays-{{ block.id }}">00</span>
+      <span class="bogo-timer-label">Days</span>
+    </div>
+    <div class="bogo-timer-box">
+      <span class="bogo-timer-val" id="bogoHours-{{ block.id }}">00</span>
+      <span class="bogo-timer-label">Hours</span>
+    </div>
+    <div class="bogo-timer-box">
+      <span class="bogo-timer-val" id="bogoMins-{{ block.id }}">00</span>
+      <span class="bogo-timer-label">Mins</span>
+    </div>
+    <div class="bogo-timer-box">
+      <span class="bogo-timer-val" id="bogoSecs-{{ block.id }}">00</span>
+      <span class="bogo-timer-label">Secs</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    let appUrl = "{{ app.url }}";
+    if (!appUrl || appUrl.includes("app.url") || appUrl === "") {
+      appUrl = "https://bogo-bundles-free-gifts-app.fly.dev";
+    }
+    const shop = "{{ shop.permanent_domain }}";
+    const blockId = "{{ block.id }}";
+    let timerInterval = null;
+
+    async function loadTimer() {
+      if (!appUrl || !shop) return;
+      try {
+        const res = await fetch(`${appUrl}/api/active-offer?shop=${shop}`);
+        if (!res.ok) return;
+        const offer = await res.json();
+        
+        if (offer && offer.isTimeLimited && offer.endsAt) {
+          const container = document.getElementById(`bogoCountdown-${blockId}`);
+          const msg = document.getElementById(`bogoMessage-${blockId}`);
+          if (offer.title) msg.innerText = offer.title + " Ends In:";
+          
+          container.style.display = 'block';
+          
+          const endTime = new Date(offer.endsAt).getTime();
+          
+          timerInterval = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = endTime - now;
+            
+            if (distance < 0) {
+              clearInterval(timerInterval);
+              container.style.display = 'none';
+              return;
+            }
+            
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            
+            document.getElementById(`bogoDays-${blockId}`).innerText = String(days).padStart(2, '0');
+            document.getElementById(`bogoHours-${blockId}`).innerText = String(hours).padStart(2, '0');
+            document.getElementById(`bogoMins-${blockId}`).innerText = String(minutes).padStart(2, '0');
+            document.getElementById(`bogoSecs-${blockId}`).innerText = String(seconds).padStart(2, '0');
+            
+          }, 1000);
+        }
+      } catch (e) {
+        console.error("Failed to load offer timer:", e);
+      }
+    }
+    
+    document.addEventListener('DOMContentLoaded', loadTimer);
+  })();
+</script>

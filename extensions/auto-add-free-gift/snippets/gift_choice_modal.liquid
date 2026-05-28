@@ -1,0 +1,239 @@
+<style>
+  .bogo-gift-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 999999;
+  }
+  .bogo-gift-modal {
+    background: #fff;
+    padding: 24px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    font-family: inherit;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  }
+  .bogo-gift-modal h2 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 20px;
+  }
+  .bogo-gift-modal p.bogo-subtitle {
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
+  .bogo-gift-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .bogo-gift-item {
+    border: 2px solid #eee;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .bogo-gift-item:hover {
+    border-color: #ccc;
+  }
+  .bogo-gift-item.selected {
+    border-color: #000;
+    background: #fafafa;
+  }
+  .bogo-gift-item img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+  .bogo-gift-item .title {
+    font-size: 13px;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .bogo-gift-item .price {
+    font-size: 12px;
+    color: #888;
+    text-decoration: line-through;
+  }
+  .bogo-gift-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  .bogo-btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-size: 14px;
+  }
+  .bogo-btn-cancel {
+    background: #eee;
+    color: #333;
+  }
+  .bogo-btn-confirm {
+    background: #000;
+    color: #fff;
+  }
+  .bogo-btn-confirm:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+</style>
+
+<div id="bogoGiftModalOverlay" class="bogo-gift-modal-overlay">
+  <div class="bogo-gift-modal">
+    <h2>Congratulations! Choose your free gift</h2>
+    <p class="bogo-subtitle" id="bogoGiftSubtitle">Select 1 gift to add to your order.</p>
+    
+    <div class="bogo-gift-grid" id="bogoGiftGrid">
+      <!-- Gift items injected here by JS -->
+    </div>
+    
+    <div class="bogo-gift-actions">
+      <button class="bogo-btn bogo-btn-cancel" onclick="BogoGiftModal.close()">No Thanks</button>
+      <button class="bogo-btn bogo-btn-confirm" id="bogoGiftConfirmBtn" onclick="BogoGiftModal.confirmSelection()" disabled>Add to Cart</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.BogoGiftModal = {
+    selectedVariants: new Set(),
+    maxSelection: 1,
+    products: [],
+
+    open: async function(rewardIds, maxSelection = 1) {
+      if (this.isOpen) return;
+      this.isOpen = true;
+      this.maxSelection = parseInt(maxSelection) || 1;
+      this.selectedVariants.clear();
+      
+      const subtitle = document.getElementById('bogoGiftSubtitle');
+      subtitle.innerText = `Select up to ${this.maxSelection} ${this.maxSelection > 1 ? 'gifts' : 'gift'} to add to your order.`;
+      
+      const grid = document.getElementById('bogoGiftGrid');
+      grid.innerHTML = '<p>Loading gifts...</p>';
+      
+      document.getElementById('bogoGiftModalOverlay').style.display = 'flex';
+      this.updateConfirmBtn();
+
+      // Fetch product details for the reward IDs
+      this.products = [];
+      try {
+        for (const gid of rewardIds) {
+          const idParts = gid.split('/');
+          const numericId = idParts[idParts.length - 1];
+          // We don't have the handle easily, but we can query by ID if we had a store API.
+          // Since this is a Shopify theme extension, the best way to get product data by ID
+          // without GraphQL is via the Search API or if the backend provides handles.
+          // For now, let's assume the backend provides 'rewardHandles' array in the offer object,
+          // or we fetch it. Let's fetch the products via Search API
+          
+          const searchRes = await fetch(`${window.Shopify.routes.root}search/suggest.json?q=id:${numericId}&resources[type]=product`);
+          const searchData = await searchRes.json();
+          if (searchData.resources.results.products.length > 0) {
+             const prod = searchData.resources.results.products[0];
+             // fetch full product JS to get variants
+             const prodRes = await fetch(`${prod.url}.js`);
+             const prodJson = await prodRes.json();
+             this.products.push(prodJson);
+          }
+        }
+
+        this.renderGrid();
+      } catch (e) {
+        console.error("Failed to load gifts", e);
+        grid.innerHTML = '<p>Error loading gifts.</p>';
+      }
+    },
+
+    renderGrid: function() {
+      const grid = document.getElementById('bogoGiftGrid');
+      grid.innerHTML = '';
+      
+      this.products.forEach(prod => {
+        const variant = prod.variants[0];
+        const el = document.createElement('div');
+        el.className = 'bogo-gift-item';
+        el.onclick = () => this.toggleSelection(variant.id, el);
+        
+        el.innerHTML = `
+          <img src="${prod.featured_image || ''}" alt="${prod.title}">
+          <span class="title">${prod.title}</span>
+          <span class="price">${Shopify.formatMoney ? Shopify.formatMoney(prod.price) : (prod.price/100).toFixed(2)}</span>
+        `;
+        grid.appendChild(el);
+      });
+    },
+
+    toggleSelection: function(variantId, el) {
+      if (this.selectedVariants.has(variantId)) {
+        this.selectedVariants.delete(variantId);
+        el.classList.remove('selected');
+      } else {
+        if (this.selectedVariants.size >= this.maxSelection) {
+          alert(`You can only select up to ${this.maxSelection} gifts.`);
+          return;
+        }
+        this.selectedVariants.add(variantId);
+        el.classList.add('selected');
+      }
+      this.updateConfirmBtn();
+    },
+
+    updateConfirmBtn: function() {
+      const btn = document.getElementById('bogoGiftConfirmBtn');
+      btn.disabled = this.selectedVariants.size === 0;
+    },
+
+    confirmSelection: async function() {
+      if (this.selectedVariants.size === 0) return;
+      
+      const btn = document.getElementById('bogoGiftConfirmBtn');
+      btn.innerText = 'Adding...';
+      btn.disabled = true;
+
+      const items = Array.from(this.selectedVariants).map(id => ({
+        id: id,
+        quantity: 1
+      }));
+
+      try {
+        await fetch(window.Shopify.routes.root + 'cart/add.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items })
+        });
+        window.location.reload();
+      } catch (e) {
+        console.error("Failed to add selected gifts", e);
+        btn.innerText = 'Error';
+      }
+    },
+
+    close: function() {
+      document.getElementById('bogoGiftModalOverlay').style.display = 'none';
+      this.isOpen = false;
+      
+      // Save state so we don't bother the user again this session if they cancel
+      sessionStorage.setItem('bogo_gift_modal_dismissed', 'true');
+    }
+  };
+</script>

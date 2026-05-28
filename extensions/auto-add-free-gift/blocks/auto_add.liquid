@@ -1,0 +1,253 @@
+{% schema %}
+{
+  "name": "Auto-Add Free Gift",
+  "target": "head",
+  "settings": []
+}
+{% endschema %}
+
+{% render 'gift_choice_modal' %}
+
+<script>
+  (function() {
+    console.log("Auto-Add Free Gift script loaded");
+
+    let appUrl = "{{ app.url }}";
+    if (!appUrl || appUrl.includes("app.url") || appUrl === "") {
+      appUrl = "https://bogo-bundles-free-gifts-app.fly.dev";
+    }
+    const shop = "{{ shop.permanent_domain }}";
+
+    if (!appUrl || !shop) {
+      console.warn("Auto-Add: Missing App URL or Shop domain");
+      return;
+    }
+
+    let isChecking = false;
+
+    async function checkCartAndAddGift() {
+      if (isChecking) return;
+      isChecking = true;
+      try {
+        // 1. Fetch active offer
+        const offerResponse = await fetch(`${appUrl}/api/active-offer?shop=${shop}`);
+        if (!offerResponse.ok) {
+          console.error("Failed to fetch active offer");
+          return;
+        }
+        const offer = await offerResponse.json();
+
+        if (!offer) {
+          console.log("No active offer found");
+          return;
+        }
+
+        console.log("Active Offer:", offer);
+
+        let config = offer.config;
+        if (typeof config === 'string') {
+          try {
+            config = JSON.parse(config);
+          } catch (e) {
+            console.error("Failed to parse config string:", e);
+          }
+        }
+
+        const isOrderValueOffer = (offer.triggerType === 'order_value' && offer.minOrderValue);
+        const isProductOffer = (offer.triggerType === 'products' || offer.triggerType === 'collections');
+        const isSubscriptionOffer = (offer.triggerType === 'subscription');
+        const isBogoGiftOffer = (offer.offerType === 'combo_offer' && config && config.configType === 'combo_bogo_gift');
+        const isBundleGiftOffer = (offer.offerType === 'combo_offer' && config && config.configType === 'combo_bundle_gift');
+
+        if (!isOrderValueOffer && !isProductOffer && !isSubscriptionOffer && !isBogoGiftOffer && !isBundleGiftOffer) {
+          console.log("Offer trigger type not recognized for auto-add.");
+          return;
+        }
+
+        const rewardIds = offer.rewardIds || (config && (config.rewardIds || config.giftProductIds)) || [];
+        if (!rewardIds || rewardIds.length === 0) {
+          return;
+        }
+
+        // 2. Fetch current cart
+        const cartResponse = await fetch(window.Shopify.routes.root + 'cart.js');
+        const cart = await cartResponse.json();
+
+        // Get gift product IDs in numeric form
+        const giftProductIds = rewardIds.map(gid => {
+          const parts = gid.split('/');
+          return parts[parts.length - 1];
+        });
+
+        const giftItemsInCart = cart.items.filter(item => 
+          giftProductIds.includes(item.product_id.toString())
+        );
+        const isGiftInCart = giftItemsInCart.length > 0;
+
+        let conditionMet = false;
+
+        // --- CONDITION CHECKS ---
+        if (isOrderValueOffer) {
+          const cartTotal = cart.total_price / 100;
+          const threshold = parseFloat(offer.minOrderValue);
+          conditionMet = cartTotal >= threshold;
+        } else if (isProductOffer) {
+           const minQty = parseInt(offer.minQty) || 1;
+           const eligibleIds = (offer.triggerIds || []).map(gid => gid.split('/').pop());
+           let eligibleCount = 0;
+           cart.items.forEach(item => {
+             if (eligibleIds.includes(item.product_id.toString()) || eligibleIds.includes(item.collection_id?.toString())) {
+               eligibleCount += item.quantity;
+             }
+           });
+           conditionMet = eligibleCount >= minQty;
+        } else if (isSubscriptionOffer) {
+           const minQty = parseInt(offer.minQty) || 1;
+           const eligibleIds = (offer.triggerIds || []).map(gid => gid.split('/').pop());
+           let eligibleCount = 0;
+           cart.items.forEach(item => {
+             // Check if item has a selling plan (subscription)
+             if (item.selling_plan_allocation) {
+               if (eligibleIds.length === 0 || eligibleIds.includes(item.product_id.toString())) {
+                 eligibleCount += item.quantity;
+               }
+             }
+           });
+           conditionMet = eligibleCount >= minQty;
+        } else if (isBogoGiftOffer || isBundleGiftOffer) {
+           // Basic check for hybrid offers. We assume the backend Shopify Function handles the exact discount,
+           // we just need to ensure the gift is in the cart. We'll simplify the check here to just see if the trigger products are present.
+           const triggerIds = (config.selectedProducts || []).map(p => p.id.split('/').pop());
+           let eligibleCount = 0;
+           cart.items.forEach(item => {
+             if (triggerIds.length === 0 || triggerIds.includes(item.product_id.toString())) {
+               if (!giftProductIds.includes(item.product_id.toString())) eligibleCount += item.quantity;
+             }
+           });
+           conditionMet = eligibleCount >= (parseInt(config.buyQty) || parseInt(config.minQty) || 1);
+        }
+
+        // --- MYSTERY GIFT STOREFRONT HIDING ---
+        if (offer.isMysteryGift) {
+          const style = document.createElement('style');
+          // Try to obscure mystery gift details dynamically on the storefront
+          rewardIds.forEach(gid => {
+            const id = gid.split('/').pop();
+            style.innerHTML += `
+              a[href*="${id}"] img { filter: blur(15px) grayscale(100%); transition: filter 0.3s; }
+              a[href*="${id}"] img:hover { filter: blur(10px) grayscale(80%); }
+              a[href*="${id}"] { pointer-events: none; }
+            `;
+          });
+          document.head.appendChild(style);
+          
+          // Also try to rewrite titles in DOM if they contain the handle/id (Best effort for generic themes)
+          setTimeout(() => {
+            document.querySelectorAll('a').forEach(a => {
+              if (rewardIds.some(gid => a.href.includes(gid.split('/').pop()) || (offer.rewardHandle && a.href.includes(offer.rewardHandle)))) {
+                const titleEl = a.closest('.cart-item')?.querySelector('.cart-item__name, .product-title, .cart__product-title');
+                if (titleEl) titleEl.innerText = 'Mystery Gift 🎁';
+              }
+            });
+          }, 1000);
+        }
+
+        // --- ACTION BASED ON CONDITION ---
+        if (conditionMet) {
+          if (!isGiftInCart) {
+            
+            // Check if choice is required
+            if (offer.giftSelectionType === 'single_choice' || offer.giftSelectionType === 'multi_choice') {
+               if (sessionStorage.getItem('bogo_gift_modal_dismissed') !== 'true') {
+                  if (window.BogoGiftModal) {
+                    window.BogoGiftModal.open(rewardIds, offer.maxGiftSelection || 1);
+                  }
+               }
+               return; // Do not auto-add, wait for modal choice
+            }
+
+            // Otherwise, Auto-Add (Mystery or Auto)
+            console.log("Adding free gift to cart...");
+            const handle = offer.rewardHandle;
+            
+            // If the API provides the exact variant ID, use it directly.
+            // Otherwise, if we have a handle, fetch its first variant.
+            let variantIdToAdd = offer.rewardVariantId || null;
+            
+            if (!variantIdToAdd && handle) {
+              try {
+                const productResponse = await fetch(window.Shopify.routes.root + `products/${handle}.js`);
+                if (productResponse.ok) {
+                  const productData = await productResponse.json();
+                  variantIdToAdd = productData.variants[0].id;
+                }
+              } catch (e) {
+                console.error("Failed to fetch product handle details");
+              }
+            }
+            
+            if (variantIdToAdd) {
+              const addResponse = await fetch(window.Shopify.routes.root + 'cart/add.js', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  items: [{
+                    id: variantIdToAdd,
+                    quantity: 1
+                  }]
+                })
+              });
+
+              if (addResponse.ok) {
+                console.log("Free gift added successfully!");
+                window.location.reload();
+              }
+            }
+          }
+        } else {
+          // If the gift is in the cart but the condition is no longer met, remove it
+          if (isGiftInCart && (offer.giftSelectionType === 'auto' || offer.giftSelectionType === 'mystery')) {
+            console.log("Condition not met. Removing free gift...");
+            const updates = {};
+            giftItemsInCart.forEach(item => {
+              updates[item.variant_id] = 0;
+            });
+
+            const removeResponse = await fetch(window.Shopify.routes.root + 'cart/update.js', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ updates })
+            });
+
+            if (removeResponse.ok) {
+              console.log("Free gift removed successfully!");
+              window.location.reload();
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error in Auto-Add script:", error);
+      } finally {
+        isChecking = false;
+      }
+    }
+
+    // Run on load
+    window.addEventListener('DOMContentLoaded', checkCartAndAddGift);
+
+    // Intercept Fetch API to catch dynamic cart updates in drawers
+    const originalFetch = window.fetch;
+    window.fetch = async function(...args) {
+      const response = await originalFetch.apply(this, args);
+      const url = args[0];
+      if (typeof url === 'string' && (url.includes('/cart/add') || url.includes('/cart/change') || url.includes('/cart/update') || url.includes('/cart/clear'))) {
+        setTimeout(checkCartAndAddGift, 500);
+      }
+      return response;
+    };
+  })();
+</script>
