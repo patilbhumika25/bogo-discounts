@@ -52,7 +52,7 @@ export async function action({ request }) {
     console.log("Parsed offer data:", data);
 
     // Calculate exact startsAt and endsAt dates
-    const startsAtDate = new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`);
+    const startsAtDate = new Date();
     let endsAtDate = null;
     
     if (data.isTimeLimited && data.timeLimit) {

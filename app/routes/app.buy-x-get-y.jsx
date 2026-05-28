@@ -97,7 +97,7 @@ export async function action({ request }) {
         limitPerCustomer:
           data.usageLimits?.includes("limit_per_customer") || false,
 
-        startsAt: new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`),
+        startsAt: new Date(),
         endsAt: data.endsAt
           ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
           : null,
@@ -197,9 +197,7 @@ export async function action({ request }) {
     var variables = {
       automaticBxgyDiscount: {
         title: data.title,
-        startsAt: new Date(
-          `${data.startsAt}T${data.startTime || "00:00"}:00Z`,
-        ).toISOString(),
+        startsAt: new Date().toISOString(),
         endsAt: data.endsAt
           ? new Date(
               `${data.endsAt}T${data.endTime || "23:59"}:00Z`,

@@ -142,9 +142,7 @@ export async function action({ request }) {
             discount: {
                 title: data.title,
                 functionId,
-                startsAt: data.startsAt
-                    ? new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`).toISOString()
-                    : new Date().toISOString(),
+                startsAt: new Date().toISOString(),
                 endsAt: data.endsAt
                     ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`).toISOString()
                     : null,
@@ -191,9 +189,7 @@ export async function action({ request }) {
                 combinesProduct: data.combinesProduct || false,
                 combinesShipping: data.combinesShipping || false,
 
-                startsAt: data.startsAt
-                    ? new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`)
-                    : new Date(),
+                startsAt: new Date(),
                 endsAt: data.endsAt
                     ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
                     : null,
