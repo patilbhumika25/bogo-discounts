@@ -160,7 +160,7 @@
             if (offer.giftSelectionType === 'single_choice' || offer.giftSelectionType === 'multi_choice') {
                if (sessionStorage.getItem('bogo_gift_modal_dismissed') !== 'true') {
                   if (window.BogoGiftModal) {
-                    window.BogoGiftModal.open(rewardIds, offer.maxGiftSelection || 1);
+                    window.BogoGiftModal.open(rewardIds, offer.maxGiftSelection || 1, offer);
                   }
                }
                return; // Do not auto-add, wait for modal choice

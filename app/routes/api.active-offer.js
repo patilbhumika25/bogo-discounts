@@ -53,35 +53,52 @@ export async function loader({ request }) {
     }
   }
 
-  // Fetch product handle and variant if rewardIds exist
+  let rewards = [];
+  // Fetch product handles and variants if rewardIds exist
   if (rewardIds && Array.isArray(rewardIds) && rewardIds.length > 0) {
     try {
       const { admin } = await unauthenticated.admin(shop);
-      const productId = rewardIds[0]; // This is a GID like gid://shopify/Product/123
       
       const response = await admin.graphql(`
-        query getProduct($id: ID!) {
-          product(id: $id) {
-            handle
-            variants(first: 1) {
-              edges {
-                node {
-                  id
+        query getProducts($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on Product {
+              id
+              handle
+              title
+              variants(first: 1) {
+                edges {
+                  node {
+                    id
+                  }
                 }
               }
             }
           }
         }
-      `, { variables: { id: productId } });
+      `, { variables: { ids: rewardIds } });
       
       const responseJson = await response.json();
-      handle = responseJson.data?.product?.handle;
-      const variantGid = responseJson.data?.product?.variants?.edges?.[0]?.node?.id;
-      if (variantGid) {
-        // Extract numeric ID from GID
-        variantId = variantGid.split('/').pop();
+      const nodes = responseJson.data?.nodes || [];
+      
+      rewards = nodes
+        .filter(node => node && node.handle)
+        .map(node => {
+          const variantGid = node.variants?.edges?.[0]?.node?.id;
+          const variantIdNumeric = variantGid ? variantGid.split('/').pop() : null;
+          return {
+            id: node.id,
+            handle: node.handle,
+            title: node.title,
+            variantId: variantIdNumeric,
+          };
+        });
+      
+      if (rewards.length > 0) {
+        handle = rewards[0].handle;
+        variantId = rewards[0].variantId;
       }
-      console.log(`Fetched handle for ${productId}: ${handle}, variantId: ${variantId}`);
+      console.log(`Fetched ${rewards.length} rewards details successfully.`);
     } catch (e) {
       console.error("Failed to fetch product details:", e);
     }
@@ -91,6 +108,7 @@ export async function loader({ request }) {
     ...offer,
     rewardHandle: handle,
     rewardVariantId: variantId,
+    rewards: rewards,
   };
 
   return new Response(JSON.stringify(responseData), {

@@ -119,7 +119,7 @@
     maxSelection: 1,
     products: [],
 
-    open: async function(rewardIds, maxSelection = 1) {
+    open: async function(rewardIds, maxSelection = 1, offer = null) {
       if (this.isOpen) return;
       this.isOpen = true;
       this.maxSelection = parseInt(maxSelection) || 1;
@@ -133,31 +133,56 @@
       
       document.getElementById('bogoGiftModalOverlay').style.display = 'flex';
       this.updateConfirmBtn();
-
+ 
       // Fetch product details for the reward IDs
       this.products = [];
       try {
-        for (const gid of rewardIds) {
-          const idParts = gid.split('/');
-          const numericId = idParts[idParts.length - 1];
-          // We don't have the handle easily, but we can query by ID if we had a store API.
-          // Since this is a Shopify theme extension, the best way to get product data by ID
-          // without GraphQL is via the Search API or if the backend provides handles.
-          // For now, let's assume the backend provides 'rewardHandles' array in the offer object,
-          // or we fetch it. Let's fetch the products via Search API
-          
-          const searchRes = await fetch(`${window.Shopify.routes.root}search/suggest.json?q=id:${numericId}&resources[type]=product`);
-          const searchData = await searchRes.json();
-          if (searchData.resources.results.products.length > 0) {
-             const prod = searchData.resources.results.products[0];
-             // fetch full product JS to get variants
-             const prodRes = await fetch(`${prod.url}.js`);
-             const prodJson = await prodRes.json();
-             this.products.push(prodJson);
+        const rewardsList = (offer && offer.rewards) || [];
+        if (rewardsList.length > 0) {
+          for (const reward of rewardsList) {
+            if (reward.handle) {
+              try {
+                const prodRes = await fetch(`${window.Shopify.routes.root}products/${reward.handle}.js`);
+                if (prodRes.ok) {
+                  const prodJson = await prodRes.json();
+                  this.products.push(prodJson);
+                }
+              } catch (err) {
+                console.error(`Failed to fetch product handle ${reward.handle}`, err);
+              }
+            }
+          }
+        }
+        
+        // Fallback if rewardsList is empty or failed to load products
+        if (this.products.length === 0) {
+          for (const gid of rewardIds) {
+            const idParts = gid.split('/');
+            const numericId = idParts[idParts.length - 1];
+            try {
+              const searchRes = await fetch(`${window.Shopify.routes.root}search/suggest.json?q=id:${numericId}&resources[type]=product`);
+              if (searchRes.ok) {
+                const searchData = await searchRes.json();
+                if (searchData.resources?.results?.products?.length > 0) {
+                   const prod = searchData.resources.results.products[0];
+                   const prodRes = await fetch(`${prod.url}.js`);
+                   if (prodRes.ok) {
+                     const prodJson = await prodRes.json();
+                     this.products.push(prodJson);
+                   }
+                }
+              }
+            } catch (searchErr) {
+              console.error(`Search fallback failed for ID ${numericId}`, searchErr);
+            }
           }
         }
 
-        this.renderGrid();
+        if (this.products.length > 0) {
+          this.renderGrid();
+        } else {
+          grid.innerHTML = '<p>No free gifts available.</p>';
+        }
       } catch (e) {
         console.error("Failed to load gifts", e);
         grid.innerHTML = '<p>Error loading gifts.</p>';
