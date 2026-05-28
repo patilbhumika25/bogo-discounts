@@ -12,6 +12,7 @@ primary_region = 'bom'
   SHOPIFY_APP_URL = 'https://bogo-bundles-free-gifts-app.fly.dev'
   SHOPIFY_API_KEY = 'e38c9e6463e93e5c12ec9b3249729d15'
   SCOPES = 'write_discounts,write_products'
+  DATABASE_URL = 'file:/data/dev.sqlite'
 
 
 [build]
