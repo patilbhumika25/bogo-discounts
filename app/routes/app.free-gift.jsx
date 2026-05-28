@@ -237,7 +237,10 @@ export async function action({ request }) {
         customerGets: {
           value: {
             discountOnQuantity: {
-              quantity: (data.giftQuantity || 1).toString(),
+              quantity: (data.giftSelectionType === "multi_choice"
+                ? (data.maxGiftSelection || 1)
+                : (data.giftQuantity || 1)
+              ).toString(),
               effect: { percentage: 1.0 }, // 100% off for free gift
             },
           },
