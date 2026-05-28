@@ -16,10 +16,18 @@ export async function loader({ request }) {
     });
   }
 
-  // Fetch the latest offer for the shop
+  const now = new Date();
+  // Fetch the latest offer for the shop that is currently active and not expired
   const offer = await prisma.offer.findFirst({
     where: {
       shop: shop,
+      startsAt: {
+        lte: now,
+      },
+      OR: [
+        { endsAt: null },
+        { endsAt: { gte: now } }
+      ]
     },
     orderBy: {
       createdAt: 'desc',

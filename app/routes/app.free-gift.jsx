@@ -51,6 +51,26 @@ export async function action({ request }) {
     const data = JSON.parse(offerDataString);
     console.log("Parsed offer data:", data);
 
+    // Calculate exact startsAt and endsAt dates
+    const startsAtDate = new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`);
+    let endsAtDate = null;
+    
+    if (data.isTimeLimited && data.timeLimit) {
+      const limit = parseInt(data.timeLimit, 10);
+      const unit = data.timeLimitUnit || "hours";
+      endsAtDate = new Date(startsAtDate.getTime());
+      
+      if (unit.toLowerCase() === "minutes") {
+        endsAtDate.setMinutes(endsAtDate.getMinutes() + limit);
+      } else if (unit.toLowerCase() === "hours") {
+        endsAtDate.setHours(endsAtDate.getHours() + limit);
+      } else if (unit.toLowerCase() === "days") {
+        endsAtDate.setDate(endsAtDate.getDate() + limit);
+      }
+    } else if (data.endsAt) {
+      endsAtDate = new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`);
+    }
+
     // Determine reward configuration based on offer type
     let rewardType = "free";
     let rewardValue = null;
@@ -95,10 +115,8 @@ export async function action({ request }) {
         limitTotalUses: data.usageLimits?.includes("limit_total") || null,
         limitPerCustomer: data.usageLimits?.includes("limit_per_customer") || false,
 
-        startsAt: new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`),
-        endsAt: data.endsAt
-          ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
-          : null,
+        startsAt: startsAtDate,
+        endsAt: endsAtDate,
 
         functionId: process.env.SHOPIFY_BOGO_BUNDLES_FREE_GIFT_ID || "0199379e-57e6-73a8-91df-bbb1eb0183f8",
         status: "DRAFT",
@@ -223,14 +241,8 @@ export async function action({ request }) {
     const variables = {
       automaticBxgyDiscount: {
         title: data.title,
-        startsAt: new Date(
-          `${data.startsAt}T${data.startTime || "00:00"}:00Z`,
-        ).toISOString(),
-        endsAt: data.endsAt
-          ? new Date(
-              `${data.endsAt}T${data.endTime || "23:59"}:00Z`,
-            ).toISOString()
-          : null,
+        startsAt: startsAtDate.toISOString(),
+        endsAt: endsAtDate ? endsAtDate.toISOString() : null,
 
         customerBuys,
 
