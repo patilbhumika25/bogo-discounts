@@ -114,6 +114,7 @@ export async function loader({ request }) {
 
   const responseData = {
     ...offer,
+    rewardIds: rewardIds,
     rewardHandle: handle,
     rewardVariantId: variantId,
     rewards: rewards,

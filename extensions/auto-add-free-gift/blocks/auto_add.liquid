@@ -64,7 +64,10 @@
           return;
         }
 
-        const rewardIds = offer.rewardIds || (config && (config.rewardIds || config.giftProductIds)) || [];
+        let rewardIds = offer.rewardIds;
+        if (!rewardIds || !Array.isArray(rewardIds) || rewardIds.length === 0) {
+          rewardIds = (config && (config.rewardIds || config.giftProductIds)) || [];
+        }
         if (!rewardIds || rewardIds.length === 0) {
           return;
         }
