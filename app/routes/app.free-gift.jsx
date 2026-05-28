@@ -977,20 +977,7 @@ export default function FreeGiftOffer() {
                         />
                       </div>
 
-                      {formData.giftSelectionType === "multi_choice" && (
-                        <div style={{ flex: 1, minWidth: "150px" }}>
-                          <TextField
-                            type="number"
-                            label="Max selection"
-                            value={formData.maxGiftSelection}
-                            onChange={(val) => handleChange("maxGiftSelection", val)}
-                            autoComplete="off"
-                            min="1"
-                            helpText="How many gifts can the customer pick?"
-                            required
-                          />
-                        </div>
-                      )}
+
 
                       <div style={{ alignSelf: "end", minWidth: "120px" }}>
                         <Button
