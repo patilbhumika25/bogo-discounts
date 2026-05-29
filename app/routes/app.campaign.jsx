@@ -16,19 +16,61 @@ import { EditIcon, DeleteIcon } from "@shopify/polaris-icons";
 import { json, redirect, useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
 
 import prisma  from "../db.server"; 
+import { authenticate } from "../shopify.server";
 
 export async function loader({ request }) {
-  // Fetch campaigns/offers from DB
+  // Authenticate the user and get session shop domain
+  const { admin, session } = await authenticate.admin(request);
+
+  // Fetch campaigns/offers from DB for the logged-in shop only
   const campaigns = await prisma.offer.findMany({
-    orderBy: { createdAt: "desc" }, // optional
+    where: { shop: session.shop },
+    orderBy: { createdAt: "desc" },
   });
 
-  console.log('campaigns', campaigns)
+  // Extract all non-null discountId's from the campaigns
+  const discountIds = campaigns
+    .map((c) => c.discountId)
+    .filter((id) => id && typeof id === "string");
 
-  return json({ campaigns });
+  let liveStatuses = {};
+  if (discountIds.length > 0) {
+    try {
+      const response = await admin.graphql(`
+        query getDiscountStatuses($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            id
+            ... on DiscountNode {
+              discount {
+                __typename
+                ... on DiscountAutomaticApp {
+                  status
+                }
+              }
+            }
+          }
+        }
+      `, { variables: { ids: discountIds } });
+      
+      const resJson = await response.json();
+      const nodes = resJson.data?.nodes || [];
+      nodes.forEach(node => {
+        if (node && node.discount) {
+          liveStatuses[node.id] = node.discount.status;
+        }
+      });
+    } catch (e) {
+      console.error("Failed to fetch live statuses from Shopify:", e);
+    }
+  }
+
+  console.log('campaigns loaded', campaigns.length, 'liveStatuses', Object.keys(liveStatuses).length);
+
+  return json({ campaigns, liveStatuses });
 }
 
 export async function action({ request }) {
+  await authenticate.admin(request);
   const formData = await request.formData();
   const id = formData.get("id");
 
@@ -41,8 +83,16 @@ export async function action({ request }) {
   return redirect("/app/campaign");
 }
 
+function getOfferStatus(offer, liveStatuses = {}) {
+  // If we have a live status from Shopify, map it to the friendly UI status
+  if (offer.discountId && liveStatuses[offer.discountId]) {
+    const liveStatus = liveStatuses[offer.discountId];
+    if (liveStatus === "ACTIVE") return "Active";
+    if (liveStatus === "SCHEDULED") return "Scheduled";
+    if (liveStatus === "EXPIRED") return "Expired";
+  }
 
-function getOfferStatus(offer) {
+  // Fallback to local DB and time calculation
   const now = new Date();
   const startsAt = new Date(offer.startsAt);
   const endsAt = offer.endsAt ? new Date(offer.endsAt) : null;
@@ -57,6 +107,22 @@ function getOfferStatus(offer) {
     return "Scheduled";
   }
   return "Active";
+}
+
+function isOfferEditable(c) {
+  let config = c.config;
+  if (config && typeof config === 'string') {
+    try {
+      config = JSON.parse(config);
+    } catch (e) {}
+  }
+  const configType = config?.configType || c.offerType;
+  
+  // Only combo offers are editable and fetch current data.
+  return (
+    configType === "custom_multi_tier_bogo" ||
+    (configType && configType.startsWith("combo_"))
+  );
 }
 
 function getCampaignTypeName(c) {
@@ -109,23 +175,16 @@ function getCampaignEditUrl(c) {
   if (configType === "custom_multi_tier_bogo") {
     return `/app/combo-offer?subtype=custom_multi_tier_bogo&id=${c.id}`;
   }
-  if (configType && configType.startsWith("bogo_")) {
-    return `/app/buy-x-get-y?subtype=${configType}&id=${c.id}`;
-  }
-  if (configType && configType.startsWith("free_gift_")) {
-    return `/app/free-gift?subtype=${configType}&id=${c.id}`;
-  }
   if (configType && configType.startsWith("combo_")) {
     return `/app/combo-offer?subtype=${configType}&id=${c.id}`;
   }
-  // Volume/Quantity Pricing
-  return `/app/volume-pricing/new?subtype=${configType}&id=${c.id}`;
+  return `/app/combo-offer?subtype=${configType}&id=${c.id}`;
 }
 
 export default function CampaignList() {
   const [selectedTab, setSelectedTab] = useState(0);
   const navigate = useNavigate();
-  const { campaigns } = useLoaderData();
+  const { campaigns, liveStatuses } = useLoaderData();
 
   const fetcher = useFetcher();
 
@@ -163,7 +222,7 @@ export default function CampaignList() {
   ];
 
   const filteredCampaigns = campaigns.filter(c => {
-    const status = getOfferStatus(c);
+    const status = getOfferStatus(c, liveStatuses);
     if (selectedTab === 1) return status === "Active";
     if (selectedTab === 2) return status === "Scheduled";
     if (selectedTab === 3) return status === "Expired";
@@ -171,8 +230,9 @@ export default function CampaignList() {
   });
 
   const rows = filteredCampaigns.map((c) => {
-    const status = getOfferStatus(c);
+    const status = getOfferStatus(c, liveStatuses);
     const badgeTone = status === "Active" ? "success" : status === "Scheduled" ? "attention" : "critical";
+    const editable = isOfferEditable(c);
     
     return [
       <Text variant="bodyMd" fontWeight="bold">{c.title}</Text>,
@@ -187,7 +247,7 @@ export default function CampaignList() {
         {!c.combinesProduct && !c.combinesOrder && !c.combinesShipping && <Text tone="subdued">None</Text>}
       </InlineStack>,
       <InlineStack gap="100">
-        <Button icon={EditIcon} onClick={() => navigate(getCampaignEditUrl(c))} />
+        {editable && <Button icon={EditIcon} onClick={() => navigate(getCampaignEditUrl(c))} />}
         <Button icon={DeleteIcon} onClick={() => handleDeleteClick(c.id)} />
       </InlineStack>,
     ];
