@@ -21,41 +21,30 @@ export async function loader({ request }) {
     let rawNodes = [];
     if (discountIds.length > 0) {
       const response = await admin.graphql(`
-        query getDiscountStatuses($ids: [ID!]!) {
-          nodes(ids: $ids) {
+        query getDiscountStatus($id: ID!) {
+          discountNode(id: $id) {
             id
             __typename
-            ... on DiscountAutomaticNode {
-              automaticDiscount {
-                __typename
-                ... on DiscountAutomaticApp {
-                  status
-                  title
-                }
-                ... on DiscountAutomaticBasic {
-                  status
-                  title
-                }
+            discount {
+              __typename
+              ... on DiscountAutomaticApp {
+                status
+                title
               }
-            }
-            ... on DiscountCodeNode {
-              codeDiscount {
-                __typename
-                ... on DiscountCodeApp {
-                  status
-                  title
-                }
-                ... on DiscountCodeBasic {
-                  status
-                  title
-                }
+              ... on DiscountAutomaticBasic {
+                status
+                title
+              }
+              ... on DiscountAutomaticBxgy {
+                status
+                title
               }
             }
           }
         }
-      `, { variables: { ids: discountIds } });
+      `, { variables: { id: discountIds[0] } });
       const resJson = await response.json();
-      rawNodes = resJson.data?.nodes || [];
+      rawNodes = [resJson.data?.discountNode];
     }
 
     return new Response(JSON.stringify({
