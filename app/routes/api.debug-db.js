@@ -7,9 +7,13 @@ export async function loader({ request }) {
       orderBy: { createdAt: 'desc' },
       take: 10
     });
+    const sessions = await prisma.session.findMany({
+      take: 10
+    });
     const now = new Date();
     return new Response(JSON.stringify({
       now: now.toISOString(),
+      sessions: sessions.map(s => ({ id: s.id, shop: s.shop })),
       offers: offers.map(o => ({
         id: o.id,
         title: o.title,
