@@ -29,6 +29,8 @@
       if (isChecking) return;
       isChecking = true;
       try {
+        console.log("Auto-Add: Checking cart conditions...");
+
         // 1. Fetch active offer
         const offerResponse = await fetch(`${appUrl}/api/active-offer?shop=${shop}`);
         if (!offerResponse.ok) {
@@ -59,35 +61,41 @@
         const isBogoGiftOffer = (offer.offerType === 'combo_offer' && config && config.configType === 'combo_bogo_gift');
         const isBundleGiftOffer = (offer.offerType === 'combo_offer' && config && config.configType === 'combo_bundle_gift');
 
-        if (!isOrderValueOffer && !isProductOffer && !isSubscriptionOffer && !isBogoGiftOffer && !isBundleGiftOffer) {
-          console.log("Offer trigger type not recognized for auto-add.");
-          return;
-        }
+        console.log("Offer Types:", { isOrderValueOffer, isProductOffer, isSubscriptionOffer, isBogoGiftOffer, isBundleGiftOffer });
 
         let rewardIds = offer.rewardIds;
         if (!rewardIds || !Array.isArray(rewardIds) || rewardIds.length === 0) {
           rewardIds = (config && (config.rewardIds || config.giftProductIds)) || [];
         }
+        console.log("Reward IDs:", rewardIds);
         if (!rewardIds || rewardIds.length === 0) {
+          console.log("No reward IDs found. Exiting.");
           return;
         }
 
         // 2. Fetch current cart
         const cartResponse = await fetch(window.Shopify.routes.root + 'cart.js');
         const cart = await cartResponse.json();
+        console.log("Current Cart:", cart);
 
         // Get gift product IDs in numeric form
-        const giftProductIds = rewardIds.map(gid => {
-          const parts = gid.split('/');
-          return parts[parts.length - 1];
-        });
+        const giftProductIds = rewardIds
+          .filter(gid => typeof gid === 'string')
+          .map(gid => {
+            const parts = gid.split('/');
+            return parts[parts.length - 1];
+          });
+        console.log("Gift Product IDs:", giftProductIds);
 
         const giftItemsInCart = cart.items.filter(item => 
           giftProductIds.includes(item.product_id.toString())
         );
         const isGiftInCart = giftItemsInCart.length > 0;
+        console.log("Gift in cart status:", { isGiftInCart, giftItemsInCart });
 
         let conditionMet = false;
+        let requiredQty = 1;
+        let eligibleCount = 0;
 
         // --- CONDITION CHECKS ---
         if (isOrderValueOffer) {
@@ -97,7 +105,6 @@
         } else if (isProductOffer) {
            const minQty = parseInt(offer.minQty) || 1;
            const eligibleIds = (offer.triggerIds || []).map(gid => gid.split('/').pop());
-           let eligibleCount = 0;
            cart.items.forEach(item => {
              if (eligibleIds.includes(item.product_id.toString()) || eligibleIds.includes(item.collection_id?.toString())) {
                eligibleCount += item.quantity;
@@ -107,9 +114,7 @@
         } else if (isSubscriptionOffer) {
            const minQty = parseInt(offer.minQty) || 1;
            const eligibleIds = (offer.triggerIds || []).map(gid => gid.split('/').pop());
-           let eligibleCount = 0;
            cart.items.forEach(item => {
-             // Check if item has a selling plan (subscription)
              if (item.selling_plan_allocation) {
                if (eligibleIds.length === 0 || eligibleIds.includes(item.product_id.toString())) {
                  eligibleCount += item.quantity;
@@ -118,8 +123,9 @@
            });
            conditionMet = eligibleCount >= minQty;
         } else if (isBogoGiftOffer || isBundleGiftOffer) {
-           const triggerIds = (config.selectedProducts || []).map(p => p.id.split('/').pop());
-           let eligibleCount = 0;
+           const triggerIds = (config.selectedProducts || [])
+             .filter(p => p && typeof p.id === 'string')
+             .map(p => p.id.split('/').pop());
            cart.items.forEach(item => {
              if (config.applyTo === "any" || triggerIds.length === 0 || triggerIds.includes(item.product_id.toString())) {
                if (!giftProductIds.includes(item.product_id.toString())) {
@@ -128,7 +134,6 @@
              }
            });
 
-           let requiredQty = 1;
            if (isBogoGiftOffer) {
              requiredQty = (parseInt(config.buyQty) || 1) + (parseInt(config.getQty) || 1);
            } else if (isBundleGiftOffer) {
@@ -145,32 +150,10 @@
            }
 
            conditionMet = eligibleCount >= requiredQty;
+           console.log("BOGO/Bundle Gift conditions:", { eligibleCount, requiredQty, conditionMet });
         }
 
-        // --- MYSTERY GIFT STOREFRONT HIDING ---
-        if (offer.isMysteryGift) {
-          const style = document.createElement('style');
-          // Try to obscure mystery gift details dynamically on the storefront
-          rewardIds.forEach(gid => {
-            const id = gid.split('/').pop();
-            style.innerHTML += `
-              a[href*="${id}"] img { filter: blur(15px) grayscale(100%); transition: filter 0.3s; }
-              a[href*="${id}"] img:hover { filter: blur(10px) grayscale(80%); }
-              a[href*="${id}"] { pointer-events: none; }
-            `;
-          });
-          document.head.appendChild(style);
-          
-          // Also try to rewrite titles in DOM if they contain the handle/id (Best effort for generic themes)
-          setTimeout(() => {
-            document.querySelectorAll('a').forEach(a => {
-              if (rewardIds.some(gid => a.href.includes(gid.split('/').pop()) || (offer.rewardHandle && a.href.includes(offer.rewardHandle)))) {
-                const titleEl = a.closest('.cart-item')?.querySelector('.cart-item__name, .product-title, .cart__product-title');
-                if (titleEl) titleEl.innerText = 'Mystery Gift 🎁';
-              }
-            });
-          }, 1000);
-        }
+        console.log("Final check:", { conditionMet, isGiftInCart });
 
         // --- ACTION BASED ON CONDITION ---
         if (conditionMet) {
@@ -180,18 +163,16 @@
             if (offer.giftSelectionType === 'single_choice' || offer.giftSelectionType === 'multi_choice') {
                if (sessionStorage.getItem('bogo_gift_modal_dismissed') !== 'true') {
                   if (window.BogoGiftModal) {
+                    console.log("Opening Gift Modal...");
                     window.BogoGiftModal.open(rewardIds, offer.maxGiftSelection || 1, offer);
                   }
                }
-               return; // Do not auto-add, wait for modal choice
+               return;
             }
 
             // Otherwise, Auto-Add (Mystery or Auto)
             console.log("Adding free gift to cart...");
             const handle = offer.rewardHandle;
-            
-            // If the API provides the exact variant ID, use it directly.
-            // Otherwise, if we have a handle, fetch its first variant.
             let variantIdToAdd = offer.rewardVariantId || null;
             
             if (!variantIdToAdd && handle) {
@@ -206,6 +187,7 @@
               }
             }
             
+            console.log("Variant to add:", variantIdToAdd);
             if (variantIdToAdd) {
               const addResponse = await fetch(window.Shopify.routes.root + 'cart/add.js', {
                 method: 'POST',
@@ -223,12 +205,14 @@
               if (addResponse.ok) {
                 console.log("Free gift added successfully!");
                 window.location.reload();
+              } else {
+                console.error("Failed to add gift to cart:", await addResponse.text());
               }
             }
           }
         } else {
           // If the gift is in the cart but the condition is no longer met, remove it
-          if (isGiftInCart && (offer.giftSelectionType === 'auto' || offer.giftSelectionType === 'mystery')) {
+          if (isGiftInCart && (offer.giftSelectionType === 'auto' || offer.giftSelectionType === 'mystery' || !offer.giftSelectionType)) {
             console.log("Condition not met. Removing free gift...");
             const updates = {};
             giftItemsInCart.forEach(item => {
