@@ -25,10 +25,27 @@ export async function loader({ request }) {
           nodes(ids: $ids) {
             id
             __typename
-            ... on DiscountNode {
-              discount {
+            ... on DiscountAutomaticNode {
+              automaticDiscount {
                 __typename
                 ... on DiscountAutomaticApp {
+                  status
+                  title
+                }
+                ... on DiscountAutomaticBasic {
+                  status
+                  title
+                }
+              }
+            }
+            ... on DiscountCodeNode {
+              codeDiscount {
+                __typename
+                ... on DiscountCodeApp {
+                  status
+                  title
+                }
+                ... on DiscountCodeBasic {
                   status
                   title
                 }
