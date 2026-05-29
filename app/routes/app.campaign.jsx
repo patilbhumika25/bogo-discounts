@@ -40,10 +40,37 @@ export async function loader({ request }) {
         query getDiscountStatuses($ids: [ID!]!) {
           nodes(ids: $ids) {
             id
-            ... on DiscountNode {
-              discount {
+            __typename
+            ... on DiscountAutomaticNode {
+              automaticDiscount {
                 __typename
                 ... on DiscountAutomaticApp {
+                  status
+                }
+                ... on DiscountAutomaticBasic {
+                  status
+                }
+                ... on DiscountAutomaticBxgy {
+                  status
+                }
+                ... on DiscountAutomaticFreeShipping {
+                  status
+                }
+              }
+            }
+            ... on DiscountCodeNode {
+              codeDiscount {
+                __typename
+                ... on DiscountCodeApp {
+                  status
+                }
+                ... on DiscountCodeBasic {
+                  status
+                }
+                ... on DiscountCodeBxgy {
+                  status
+                }
+                ... on DiscountCodeFreeShipping {
                   status
                 }
               }
@@ -55,8 +82,11 @@ export async function loader({ request }) {
       const resJson = await response.json();
       const nodes = resJson.data?.nodes || [];
       nodes.forEach(node => {
-        if (node && node.discount) {
-          liveStatuses[node.id] = node.discount.status;
+        if (node) {
+          const discount = node.automaticDiscount || node.codeDiscount;
+          if (discount) {
+            liveStatuses[node.id] = discount.status;
+          }
         }
       });
     } catch (e) {
