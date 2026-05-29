@@ -42,12 +42,92 @@ export async function action({ request }) {
 }
 
 
+function getOfferStatus(offer) {
+  const now = new Date();
+  const startsAt = new Date(offer.startsAt);
+  const endsAt = offer.endsAt ? new Date(offer.endsAt) : null;
+
+  if (offer.status === "PAUSED") return "Paused";
+  if (offer.status === "DRAFT") return "Draft";
+
+  if (endsAt && endsAt < now) {
+    return "Expired";
+  }
+  if (startsAt > now) {
+    return "Scheduled";
+  }
+  return "Active";
+}
+
+function getCampaignTypeName(c) {
+  let config = c.config;
+  if (config && typeof config === 'string') {
+    try {
+      config = JSON.parse(config);
+    } catch (e) {}
+  }
+  const configType = config?.configType || c.offerType;
+  
+  const names = {
+    combo_bogo_discount: "BOGO + Discount Combo",
+    combo_bogo_gift: "BOGO + Gift",
+    combo_bundle_gift: "Bundle + Gift",
+    custom_multi_tier_bogo: "Multi-Tier BOGO",
+    free_gift_order_value: "Free Gift on Order Value",
+    free_gift_product: "Free Gift on Product",
+    free_gift_mystery: "Mystery Gift",
+    free_gift_auto: "Auto-Add Gift",
+    free_gift_choice: "Customer Choice Gift",
+    free_gift_multi_choice: "Multi-Choice Gift",
+    free_gift_time_limited: "Time-Limited Free Gift",
+    fixed_bundle: "Fixed Price Bundles",
+    tiered_percentage: "Tiered Percentage Discounts",
+    mix_match_volume: "Mix & Match Volume",
+    cart_wide_volume: "Cart-Wide Volume",
+    multi_tier_volume: "Multi-Tier Volume",
+    bogo_same: "Basic BOGO (Same Product)",
+    bogo_xy_discount: "Buy X Get Y at Discount",
+    bogo_cheapest_free: "Buy X Get Cheapest Free",
+    bogo_diff_product: "Buy X Get Y (Diff Product)",
+    bogo_mix_match: "Mix & Match BOGO",
+    bogo_qty_limit: "BOGO with Qty Limits",
+    bogo_variant_collection: "BOGO on Variants/Collections",
+  };
+  
+  return names[configType] || configType || "Combo Offer";
+}
+
+function getCampaignEditUrl(c) {
+  let config = c.config;
+  if (config && typeof config === 'string') {
+    try {
+      config = JSON.parse(config);
+    } catch (e) {}
+  }
+  const configType = config?.configType || c.offerType;
+
+  if (configType === "custom_multi_tier_bogo") {
+    return `/app/combo-offer?subtype=custom_multi_tier_bogo&id=${c.id}`;
+  }
+  if (configType && configType.startsWith("bogo_")) {
+    return `/app/buy-x-get-y?subtype=${configType}&id=${c.id}`;
+  }
+  if (configType && configType.startsWith("free_gift_")) {
+    return `/app/free-gift?subtype=${configType}&id=${c.id}`;
+  }
+  if (configType && configType.startsWith("combo_")) {
+    return `/app/combo-offer?subtype=${configType}&id=${c.id}`;
+  }
+  // Volume/Quantity Pricing
+  return `/app/volume-pricing/new?subtype=${configType}&id=${c.id}`;
+}
+
 export default function CampaignList() {
   const [selectedTab, setSelectedTab] = useState(0);
-    const navigate = useNavigate();
-    const { campaigns } = useLoaderData();
+  const navigate = useNavigate();
+  const { campaigns } = useLoaderData();
 
-    const fetcher = useFetcher();
+  const fetcher = useFetcher();
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [campaignToDelete, setCampaignToDelete] = useState(null);
@@ -82,32 +162,36 @@ export default function CampaignList() {
     { id: "expired", content: "Expired" },
   ];
 
-  const rows = campaigns.map((c) => [
-    <Text variant="bodyMd" fontWeight="bold">{c.title}</Text>,
-    <Badge tone={c.status === "Active" ? "success" : "critical"}>
-      {c.status}
-    </Badge>,
-    c.type,
-    // String(c.used),
-    <>
-      <Text>Product discounts</Text>
-      <br />
-      <Text>Order discounts</Text>
-    </>,
-    // String(c.views),
-    // String(c.atcs),
-    // `${c.cr}%`,
-    // `₹${c.revenue}`,
-    <InlineStack gap="100">
-      <Icon
-        source={EditIcon}
-        tone="base"
-        onClick={() => navigate(`/campaigns/${c.id}/edit`)}
-      />
-      <Button icon={DeleteIcon} onClick={() => handleDeleteClick(c.id)} />
+  const filteredCampaigns = campaigns.filter(c => {
+    const status = getOfferStatus(c);
+    if (selectedTab === 1) return status === "Active";
+    if (selectedTab === 2) return status === "Scheduled";
+    if (selectedTab === 3) return status === "Expired";
+    return true; // All
+  });
 
-    </InlineStack>,
-  ]);
+  const rows = filteredCampaigns.map((c) => {
+    const status = getOfferStatus(c);
+    const badgeTone = status === "Active" ? "success" : status === "Scheduled" ? "attention" : "critical";
+    
+    return [
+      <Text variant="bodyMd" fontWeight="bold">{c.title}</Text>,
+      <Badge tone={badgeTone}>
+        {status}
+      </Badge>,
+      getCampaignTypeName(c),
+      <InlineStack gap="100" wrap>
+        {c.combinesProduct && <Badge tone="info">Product discounts</Badge>}
+        {c.combinesOrder && <Badge tone="info">Order discounts</Badge>}
+        {c.combinesShipping && <Badge tone="info">Shipping discounts</Badge>}
+        {!c.combinesProduct && !c.combinesOrder && !c.combinesShipping && <Text tone="subdued">None</Text>}
+      </InlineStack>,
+      <InlineStack gap="100">
+        <Button icon={EditIcon} onClick={() => navigate(getCampaignEditUrl(c))} />
+        <Button icon={DeleteIcon} onClick={() => handleDeleteClick(c.id)} />
+      </InlineStack>,
+    ];
+  });
 
   return (
     <Page

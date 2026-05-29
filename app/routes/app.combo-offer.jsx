@@ -1,5 +1,5 @@
 import { json } from "@remix-run/node";
-import { useNavigate, useActionData, Form, useSearchParams } from "@remix-run/react";
+import { useNavigate, useActionData, Form, useSearchParams, useLoaderData } from "@remix-run/react";
 import {
     Page,
     BlockStack,
@@ -23,10 +23,20 @@ import { authenticate } from "../shopify.server";
 import { getProductsFromCollections } from "../utils/products.server";
 import prisma from "../db.server";
 
-// LOADER - Ensures the session is valid when the page loads
+// LOADER - Ensures the session is valid and loads an existing offer if id is provided
 export async function loader({ request }) {
     await authenticate.admin(request);
-    return null;
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+
+    let existingOffer = null;
+    if (id) {
+        existingOffer = await prisma.offer.findUnique({
+            where: { id }
+        });
+    }
+
+    return json({ existingOffer });
 }
 
 // ============================================================================
@@ -124,91 +134,164 @@ export async function action({ request }) {
             return json({ success: false, error: "Function ID not configured in .env" }, { status: 500 });
         }
 
-        const mutation = `
-      mutation CreateAutomaticDiscount($discount: DiscountAutomaticAppInput!) {
-        discountAutomaticAppCreate(automaticAppDiscount: $discount) {
-          automaticAppDiscount {
-            discountId
-          }
-          userErrors {
-            field
-            message
-          }
+        const existingOfferId = data.id;
+        let discountId = null;
+        if (existingOfferId) {
+            const existingOffer = await prisma.offer.findUnique({
+                where: { id: existingOfferId }
+            });
+            discountId = existingOffer?.discountId;
         }
-      }
-    `;
 
-        const variables = {
-            discount: {
-                title: data.title,
-                functionId,
-                startsAt: new Date().toISOString(),
-                endsAt: data.endsAt
-                    ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`).toISOString()
-                    : null,
-                combinesWith: {
-                    orderDiscounts: data.combinesOrder || false,
-                    productDiscounts: data.combinesProduct || false,
-                    shippingDiscounts: data.combinesShipping || false,
-                },
-                discountClasses: ["PRODUCT"],
-                metafields: [
-                    {
-                        namespace: "bogo",
-                        key: "config",
-                        type: "json",
-                        value: JSON.stringify(config),
+        let mutation;
+        let variables;
+        if (discountId) {
+            mutation = `
+              mutation UpdateAutomaticDiscount($id: ID!, $discount: DiscountAutomaticAppInput!) {
+                discountAutomaticAppUpdate(id: $id, automaticAppDiscount: $discount) {
+                  automaticAppDiscount {
+                    discountId
+                  }
+                  userErrors {
+                    field
+                    message
+                  }
+                }
+              }
+            `;
+            variables = {
+                id: discountId,
+                discount: {
+                    title: data.title,
+                    startsAt: new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`).toISOString(),
+                    endsAt: data.endsAt
+                        ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`).toISOString()
+                        : null,
+                    combinesWith: {
+                        orderDiscounts: data.combinesOrder || false,
+                        productDiscounts: data.combinesProduct || false,
+                        shippingDiscounts: data.combinesShipping || false,
                     },
-                ],
-            },
-        };
+                    metafields: [
+                        {
+                            namespace: "bogo",
+                            key: "config",
+                            type: "json",
+                            value: JSON.stringify(config),
+                        },
+                    ],
+                }
+            };
+        } else {
+            mutation = `
+              mutation CreateAutomaticDiscount($discount: DiscountAutomaticAppInput!) {
+                discountAutomaticAppCreate(automaticAppDiscount: $discount) {
+                  automaticAppDiscount {
+                    discountId
+                  }
+                  userErrors {
+                    field
+                    message
+                  }
+                }
+              }
+            `;
+            variables = {
+                discount: {
+                    title: data.title,
+                    functionId,
+                    startsAt: new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`).toISOString(),
+                    endsAt: data.endsAt
+                        ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`).toISOString()
+                        : null,
+                    combinesWith: {
+                        orderDiscounts: data.combinesOrder || false,
+                        productDiscounts: data.combinesProduct || false,
+                        shippingDiscounts: data.combinesShipping || false,
+                    },
+                    discountClasses: ["PRODUCT"],
+                    metafields: [
+                        {
+                            namespace: "bogo",
+                            key: "config",
+                            type: "json",
+                            value: JSON.stringify(config),
+                        },
+                    ],
+                },
+            };
+        }
 
         const response = await admin.graphql(mutation, { variables });
         const result = await response.json();
 
-        if (result.data?.discountAutomaticAppCreate?.userErrors?.length > 0) {
-            const errors = result.data.discountAutomaticAppCreate.userErrors;
+        const userErrors = discountId
+            ? result.data?.discountAutomaticAppUpdate?.userErrors
+            : result.data?.discountAutomaticAppCreate?.userErrors;
+
+        if (userErrors && userErrors.length > 0) {
+            const errors = userErrors;
             return json({ success: false, errors: errors.map((e) => e.message).join(", ") });
         }
 
-        const discountId = result.data?.discountAutomaticAppCreate?.automaticAppDiscount?.discountId;
+        const returnedDiscountId = discountId
+            ? result.data?.discountAutomaticAppUpdate?.automaticAppDiscount?.discountId
+            : result.data?.discountAutomaticAppCreate?.automaticAppDiscount?.discountId;
 
         // Save to internal database
-        await prisma.offer.create({
-            data: {
-                title: data.title,
-                offerType: "combo_offer",
-                triggerType: "products", // Combo offers always products-based
-                triggerIds: selectedProductIds,
-                minQty: 1,
+        if (existingOfferId) {
+            await prisma.offer.update({
+                where: { id: existingOfferId },
+                data: {
+                    title: data.title,
+                    triggerIds: selectedProductIds,
+                    combinesOrder: data.combinesOrder || false,
+                    combinesProduct: data.combinesProduct || false,
+                    combinesShipping: data.combinesShipping || false,
+                    startsAt: new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`),
+                    endsAt: data.endsAt
+                        ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
+                        : null,
+                    config: config,
+                }
+            });
+        } else {
+            await prisma.offer.create({
+                data: {
+                    title: data.title,
+                    offerType: "combo_offer",
+                    triggerType: "products", // Combo offers always products-based
+                    triggerIds: selectedProductIds,
+                    minQty: 1,
 
-                rewardType: "mixed",
-                rewardValue: null,
+                    rewardType: "mixed",
+                    rewardValue: null,
 
-                combinesOrder: data.combinesOrder || false,
-                combinesProduct: data.combinesProduct || false,
-                combinesShipping: data.combinesShipping || false,
+                    combinesOrder: data.combinesOrder || false,
+                    combinesProduct: data.combinesProduct || false,
+                    combinesShipping: data.combinesShipping || false,
 
-                startsAt: new Date(),
-                endsAt: data.endsAt
-                    ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
-                    : null,
+                    startsAt: new Date(`${data.startsAt}T${data.startTime || "00:00"}:00Z`),
+                    endsAt: data.endsAt
+                        ? new Date(`${data.endsAt}T${data.endTime || "23:59"}:00Z`)
+                        : null,
 
-                status: "ACTIVE",
-                functionId,
-                discountId,
-                config: config,
-                shop: session.shop,
-            }
-        });
+                    status: "ACTIVE",
+                    functionId,
+                    discountId: returnedDiscountId,
+                    config: config,
+                    shop: session.shop,
+                }
+            });
+        }
 
         return json({
             success: true,
-            discountId,
-            message: "Combo offer created successfully!",
+            discountId: returnedDiscountId,
+            message: existingOfferId ? "Combo offer updated successfully!" : "Combo offer created successfully!",
         });
     } catch (error) {
-        console.error("Error creating Combo:", error);
+        console.error("Error saving Combo:", error);
         return json({ success: false, error: error.message }, { status: 500 });
     }
 }
@@ -218,6 +301,7 @@ export async function action({ request }) {
 // ============================================================================
 
 export default function ComboOffer() {
+    const { existingOffer } = useLoaderData();
     const navigate = useNavigate();
     const actionData = useActionData();
     const shopify = useAppBridge();
@@ -226,34 +310,76 @@ export default function ComboOffer() {
     const subtypeParam = searchParams.get("subtype") || "combo_bogo_discount";
     const subtypeInfo = SUBTYPES[subtypeParam] || SUBTYPES.combo_bogo_discount;
 
-    const [formData, setFormData] = useState({
-        title: "",
-        configType: subtypeParam,
-        bogoType: "bogo_same",
-        buyQty: "1",
-        getQty: "1",
-        extraDiscountPercent: "10",
-        extraMessage: "",
-        applyTo: "any",
-        selectedProducts: [],
-        selectedCollections: [], // New state
-        giftProducts: [],
-        volumeTiers: [{ minQty: "3", fixedPrice: "1499" }],
-        bogoTiers: [{ buyQty: "2", getQty: "1" }],
-        message: "",
-        startsAt: new Date().toISOString().split("T")[0],
-        startTime: "00:00",
-        endsAt: "",
-        endTime: "23:59",
-        combinesOrder: false,
-        combinesProduct: false,
-        combinesShipping: false,
+    const [formData, setFormData] = useState(() => {
+        if (existingOffer) {
+            let configObj = existingOffer.config;
+            if (configObj && typeof configObj === 'string') {
+                try {
+                    configObj = JSON.parse(configObj);
+                } catch (e) {}
+            }
+            
+            const giftProducts = (configObj?.giftProductIds || []).map(id => ({ id, title: `Product ${id.split('/').pop()}` }));
+            const selectedProducts = (configObj?.selectedProducts || []).map(p => ({ id: p.id, title: `Product ${p.id.split('/').pop()}` }));
+            const selectedCollections = (configObj?.originalSelectedCollections || []).map(c => ({ id: c.id, title: c.title || `Collection ${c.id.split('/').pop()}` }));
+
+            return {
+                id: existingOffer.id,
+                title: existingOffer.title,
+                configType: configObj?.configType || subtypeParam,
+                bogoType: configObj?.bogoType || "bogo_same",
+                buyQty: configObj?.buyQty ? String(configObj.buyQty) : "1",
+                getQty: configObj?.getQty ? String(configObj.getQty) : "1",
+                extraDiscountPercent: configObj?.extraDiscountPercent ? String(configObj.extraDiscountPercent) : "10",
+                extraMessage: configObj?.extraMessage || "",
+                applyTo: configObj?.applyTo || "any",
+                selectedProducts: selectedProducts,
+                selectedCollections: selectedCollections,
+                giftProducts: giftProducts,
+                volumeTiers: configObj?.volumeTiers || [{ minQty: "3", fixedPrice: "1499" }],
+                bogoTiers: configObj?.bogoTiers || [{ buyQty: "2", getQty: "1" }],
+                message: configObj?.message || "",
+                startsAt: existingOffer.startsAt ? new Date(existingOffer.startsAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+                startTime: existingOffer.startsAt ? new Date(existingOffer.startsAt).toTimeString().slice(0, 5) : "00:00",
+                endsAt: existingOffer.endsAt ? new Date(existingOffer.endsAt).toISOString().split("T")[0] : "",
+                endTime: existingOffer.endsAt ? new Date(existingOffer.endsAt).toTimeString().slice(0, 5) : "23:59",
+                combinesOrder: existingOffer.combinesOrder,
+                combinesProduct: existingOffer.combinesProduct,
+                combinesShipping: existingOffer.combinesShipping,
+            };
+        }
+        return {
+            title: "",
+            configType: subtypeParam,
+            bogoType: "bogo_same",
+            buyQty: "1",
+            getQty: "1",
+            extraDiscountPercent: "10",
+            extraMessage: "",
+            applyTo: "any",
+            selectedProducts: [],
+            selectedCollections: [],
+            giftProducts: [],
+            volumeTiers: [{ minQty: "3", fixedPrice: "1499" }],
+            bogoTiers: [{ buyQty: "2", getQty: "1" }],
+            message: "",
+            startsAt: new Date().toISOString().split("T")[0],
+            startTime: "00:00",
+            endsAt: "",
+            endTime: "23:59",
+            combinesOrder: false,
+            combinesProduct: false,
+            combinesShipping: false,
+        };
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        setFormData((prev) => ({ ...prev, configType: subtypeParam }));
+        setFormData((prev) => {
+            if (prev.id) return prev;
+            return { ...prev, configType: subtypeParam };
+        });
     }, [subtypeParam]);
 
     useEffect(() => {
